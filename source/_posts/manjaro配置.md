@@ -321,6 +321,42 @@ git config --global user.name "hawk"
 git config --global user.email 18801353760@163.com
 ```
 
+### 导出公、私钥
+
+首先，如果没有相关的公、私钥，可以参考[帮助链接](https://gitee.com/help/articles/4229)，生成自己的公、私钥
+
+这里将公、私钥进行压缩，并进行加密处理，在konsole中执行如下bash命令
+```bash
+git_name=hawk
+git_email=18801353760@163.com
+git_passwd=
+
+tar -zcvf ssh.tar.gz -C ~ --exclude .ssh/known_hosts .ssh/
+
+K=$(echo ${git_passwd}${git_name}${git_email} | md5sum | awk '{print $1}')
+iv=$(echo ${git_passwd}${git_name} | md5sum | awk '{print $1}')
+openssl enc -aes-256-cbc -e -in ssh.tar.gz -out ssh.dec -K ${K} -iv ${iv}
+```
+
+### 导入公、私钥
+
+即导入上述导出的公、私钥，这里给出我自己的加密后的[公、私钥](ssh.dec)
+然后对文件首先进行解密处理，最后解压缩即可，在konsole中执行如下bash命令
+```bash
+git_name=hawk
+git_email=18801353760@163.com
+git_passwd=
+
+
+K=$(echo ${git_passwd}${git_name}${git_email} | md5sum | awk '{print $1}')
+iv=$(echo ${git_passwd}${git_name} | md5sum | awk '{print $1}')
+openssl enc -aes-256-cbc -d -in ssh.dec -out ssh.tar.gz -K ${K} -iv ${iv}
+
+tar -zxvf ssh.tar.gz -C ~/
+chmod 700 -R ~/.ssh
+```
+
+
 # 异常处理
 
 ## Failed to start Load/Save Screen Backlight Brightness of backlight:acpi_video0
