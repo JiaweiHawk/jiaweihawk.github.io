@@ -458,7 +458,85 @@ sudo virt-manager
 
 #### 配置VirtIO guest tools
 
-为了启用主机和虚拟机之间的剪切板共享，需要在虚拟机中安装VirtIO guest tools，点击[链接](https://www.spice-space.org/download/binaries/spice-guest-tools/)下载安装即可
+为了启用主机和虚拟机之间的剪切板共享，需要在虚拟机中安装VirtIO guest tools，点击[https://www.spice-space.org/download/binaries/spice-guest-tools/](https://www.spice-space.org/download/binaries/spice-guest-tools/)下载安装即可
+
+
+## 设置SSR代理
+
+这里通过安装V2RAY代理，并通过其SSR插件实现SSR代理
+
+### 下载v2ray代理
+
+执行下列命令安装**v2ray**代理软件
+```bash
+yay -S v2ray
+```
+
+### 设置qv2ray代理
+
+为了操作方便，下载**qv2ray**，点击[https://github.com/Qv2ray/Qv2ray/releases](https://github.com/Qv2ray/Qv2ray/releases)链接进行下载
+
+执行如下命令完成安装
+```bash
+mkdir ~/qv2ray
+sudo chmod +x $(ls | grep "Qv2ray")
+```
+
+之后执行`./$(ls | grep "Qv2ray") 1> /dev/null 2>&1`，将最终集合的路径指定为前面新建的路径即可，出现如下相关的界面
+![qv2ray初始界面](qv2ray初始界面.PNG)
+
+点击右上角的**Preferencees**，设置语言信息、连接信息、V2RAY核心可执行文件路径和V2RAY资源目录即可，如下所示
+![qv2ray常规设置](qv2ray常规设置.PNG)
+
+![qv2ray中v2ray相关设置](qv2ray中v2ray相关设置.PNG)
+
+
+
+最后执行下述命令，安装集合好的qv2ray文件
+```bash
+sudo ln -sf ~/qv2ray/$(ls ~/qv2ray | grep "Qv2ray") /usr/bin/qv2ray
+```
+
+### 配置qv2ray插件
+
+下载**qv2ray的ssr插件**，点击[https://github.com/Qv2ray/QvPlugin-SSR/releases](https://github.com/Qv2ray/QvPlugin-SSR/releases)链接进行下载
+
+执行如下命令，完成插件的安装
+```bash
+mv $(ls | grep "QvPlugin") ~/.config/qv2ray/plugins
+```
+
+### 订阅节点
+
+执行`qv2ray 1> /dev/null 2>&1`，打开**qv2ray**代理
+![qv2ray初始界面](qv2ray初始界面.PNG)
+
+然后点击该界面左上角的**分组**按钮，编辑分组信息
+![qv2ray编辑分组信息](qv2ray编辑分组信息.PNG)
+
+最后在该界面右侧，输入相关的订阅地址，即可完成节点的订阅
+
+
+### 配置proxychains
+
+大部分时候，我们通过执行`qv2ray 1> /dev/null 2>&1`，实现数据走系统代理
+但是部分命令行的数据并不走系统代理，因此需要通过**proxychains**完成相关的代理
+
+首先执行如下命令完成代理
+```bash
+sudo pacman -S proxychians
+```
+
+接着，需要修改全局代理链，将**/etc/proxychains.conf**文件的代理修改如下
+```bash
+[ProxyList]
+socks5  127.0.0.1 1089
+```
+
+上述端口为**qv2ray**中监听的端口即可
+之后，通过`proxychains -q [待执行命令]`，完成代理
+
+
 
 # 异常处理
 
