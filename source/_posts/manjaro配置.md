@@ -356,6 +356,109 @@ tar -zxvf ssh.tar.gz -C ~/
 chmod 700 -R ~/.ssh
 ```
 
+## 设置QEMU
+
+> **qemu**是一个广泛使用的开源计算机模拟器和虚拟机
+
+  因此，这里使用qemu提供manjaro上的虚拟机功能
+
+### 安装qemu
+
+这里安装qemu相关的依赖和功能软件包
+```bash
+sudo pacman -S qemu ovmf bridge-utils vde2 dnsmasq ebtables openbsd-netcat
+```
+
+| 软件包 | 功能 |
+| :-: | :-: |
+| ovmf | UEFI支持 |
+| bridge-utils | 网络桥接支持 |
+| vde2 | 以太网支持 |
+| dnsmasq ebtables | NAT/DHCP网络 |
+| openbsd-netcat | ssh连接虚拟机支持 |
+
+### 安装图形化前端管理
+
+这里选择**virt-manager**作为管理KVM虚拟机的前端。而virt-manager依赖于libvirt的提供的接口，因此安装virt-manager及其依赖
+```bash
+sudo pacman -S virt-manager virt-viewer libvirt
+```
+
+然后启动libvirtd服务，并将网络设置为自动启动即可
+```bash
+sudo systemctl enable libvirtd
+sudo systemctl start libvirtd
+
+sudo virsh net-autostart default
+```
+
+### 配置win10虚拟机
+
+#### 下载win10ISO文件
+
+前往[ITELLYOU](https://next.itellyou.cn/)，下载官方win10的ISO镜像文件
+
+#### 下载virtio-win驱动
+
+为了提高虚拟机性能，虚拟机会使用virtIO技术，而windows客户机需要手动安装该驱动
+
+首先，点击[链接](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso)下载相关驱动
+
+#### 启动virt-manager
+
+执行如下命令启动**virt-manager**管理程序
+```bash
+sudo virt-manager
+```
+
+![启动virt-manager](启动virt-manager.PNG)
+
+#### 新建虚拟机
+
+在**virt-manager**界面的上方菜单，点击最左侧的**创建新的虚拟机**按钮
+![点击创建新的虚拟机按钮](点击创建新的虚拟机按钮.PNG)
+
+
+选择从本地镜像安装，`x86_64`架构，点击右下角**Forward**下一步
+![选择镜像界面](选择镜像.PNG)
+
+
+点击该界面上方的**Browse**界面，选择ISO位置，界面如下所示
+![管理存储池界面](管理存储池界面.PNG)
+
+
+这里选择右下角第一个**Browse Local**，选择前面下载的win10的ISO镜像即可
+![选择win10镜像](选择win10镜像.PNG)
+
+该界面下方取消**自动检测系统**，直接选择windows10系统
+![选择操作系统为win10](选择操作系统为win10.PNG)
+
+点击右下角的**Forward**下一步，设置内存和CPU信息
+![设置内存和CPU](设置内存和CPU.PNG)
+
+点击右下角的**Forward**下一步，设置磁盘信息
+![设置虚拟机磁盘](设置虚拟机磁盘.PNG)
+
+点击右下角的**Forward**下一步，选择在启动前编辑选项
+![在启动前编辑虚拟机](在启动前编辑虚拟机.PNG)
+
+点击右下角的**Finish**，进入虚拟机的编辑界面，完成相关的编辑
+![虚拟机编辑界面](虚拟机编辑界面.PNG)
+
+在这里添加另一个CDROM设置，其文件是前面下载的Virtio驱动文件，如下所示
+![添加Virtio驱动CDROM](添加Virtio驱动CDROM.PNG)
+
+完成编辑后，点击右上角的**Begin Installation**，完成虚拟机的安装
+
+这里特别说明的是，当进行到**你想将Windows安装在哪里**时，其无法显示磁盘信息，如下所示
+![未加载Virtio驱动程序](未加载Virtio驱动程序.PNG)
+
+点击左下角**加载驱动程序**，选择相关的驱动程序安装即可
+![安装Virtio驱动程序](安装Virtio驱动程序.PNG)
+
+#### 配置VirtIO guest tools
+
+为了启用主机和虚拟机之间的剪切板共享，需要在虚拟机中安装VirtIO guest tools，点击[链接](https://www.spice-space.org/download/binaries/spice-guest-tools/)下载安装即可
 
 # 异常处理
 
