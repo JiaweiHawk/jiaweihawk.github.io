@@ -482,10 +482,11 @@ mkdir ~/qv2ray
 sudo chmod +x $(ls | grep "Qv2ray")
 ```
 
-之后执行`./$(ls | grep "Qv2ray") 1> /dev/null 2>&1`，将最终集合的路径指定为前面新建的路径即可，出现如下相关的界面
+之后执行`./$(ls | grep "Qv2ray")`，将最终集合的路径指定为前面新建的路径即可，出现如下相关的界面
 ![qv2ray初始界面](qv2ray初始界面.PNG)
 
-点击右上角的**Preferencees**，设置语言信息、连接信息、V2RAY核心可执行文件路径和V2RAY资源目录即可，如下所示
+首先点击该界面左上角第二个**Plugins**按钮，使程序生成对应的插件目录
+然后点击右上角第一个**Preferencees**按钮，设置语言信息、连接信息、V2RAY核心可执行文件路径和V2RAY资源目录即可，如下所示
 ![qv2ray常规设置](qv2ray常规设置.PNG)
 
 ![qv2ray中v2ray相关设置](qv2ray中v2ray相关设置.PNG)
@@ -508,7 +509,7 @@ mv $(ls | grep "QvPlugin") ~/.config/qv2ray/plugins
 
 ### 订阅节点
 
-执行`qv2ray 1> /dev/null 2>&1`，打开**qv2ray**代理
+执行`qv2ray`，打开**qv2ray**代理
 ![qv2ray初始界面](qv2ray初始界面.PNG)
 
 然后点击该界面左上角的**分组**按钮，编辑分组信息
@@ -519,7 +520,7 @@ mv $(ls | grep "QvPlugin") ~/.config/qv2ray/plugins
 
 ### 配置proxychains
 
-大部分时候，我们通过执行`qv2ray 1> /dev/null 2>&1`，实现数据走系统代理
+大部分时候，我们通过执行`qv2ray`，实现数据走系统代理
 但是部分命令行的数据并不走系统代理，因此需要通过**proxychains**完成相关的代理
 
 首先执行如下命令完成代理
