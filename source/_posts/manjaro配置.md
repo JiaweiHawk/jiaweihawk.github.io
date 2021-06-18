@@ -478,11 +478,11 @@ yay -S v2ray
 
 执行如下命令完成安装
 ```bash
-mkdir ~/qv2ray
-sudo chmod +x $(ls | grep "Qv2ray")
+mv $(ls | grep "Qv2ray") qv2ray
+sudo chmod +x qv2ray
 ```
 
-之后执行`./$(ls | grep "Qv2ray")`，将最终集合的路径指定为前面新建的路径即可，出现如下相关的界面
+之后双击*qv2ray*图案，点击**Run Onece**，出现如下相关的界面
 ![qv2ray初始界面](qv2ray初始界面.PNG)
 
 首先点击该界面左上角第二个**Plugins**按钮，使程序生成对应的插件目录
@@ -490,10 +490,6 @@ sudo chmod +x $(ls | grep "Qv2ray")
 ![qv2ray常规设置](qv2ray常规设置.PNG)
 
 ![qv2ray中v2ray相关设置](qv2ray中v2ray相关设置.PNG)
-
-
-之后可以通过点击屏幕左下角的`application launcher`，或者点击`Win`建，快速启动**qv2ray**，也可以将其拖拽到下方菜单栏，从而快速启动
-![qv2ray启动](qv2ray启动.PNG)
 
 ### 配置qv2ray插件
 
