@@ -356,6 +356,60 @@ tar -zxvf ssh.tar.gz -C ~/
 chmod 700 -R ~/.ssh
 ```
 
+
+
+
+## 设置SSR代理
+
+这里通过安装**electron-ssr**，实现代理上网
+
+### 下载electron-ssr代理
+
+从[https://github.com/shadowsocksrr/electron-ssr/releases](https://github.com/shadowsocksrr/electron-ssr/releases)点击下载** \*.pacman**文件
+
+执行下列文件，完成**electron-ssr**的安装
+```bash
+sudo pacman -U $(ls | grep "pacman") && sudo rm -rf $(ls | grep "pacman")
+```
+
+可以点击屏幕左下角的`application launcher`，或者点击`Win`建，打开`All Applications`，即可找到**electron-ssr**，同时可以将其拖拽到菜单中，方便打开
+![安装electron-ssr](安装electron-ssr.PNG)
+
+### 设置electron-ssr代理
+
+首先打开**eletron-ssr**，点击上侧菜单栏的**Settings**，并选择**option**，完成如下配置
+![eletron-ssr options配置](eletron-ssr options配置.PNG)
+
+选择上侧中间的**订阅管理**，添加相关的订阅信息*(通过输入回车键确认)*
+![eletron-ssr 节点订阅](eletron-ssr 节点订阅.PNG)
+
+接着，在右下角系统托盘处，右键**eletron-ssr**图标，在**系统代理模式**中选择**PAC模式**
+![eletron-ssr 代理模式](eletron-ssr 代理模式.PNG)
+
+最后，在右下角系统托盘处，通过**服务器**选择代理服务器；通过**开启应用**完成代理开启
+
+### 配置proxychains
+
+大部分时候，打开**eletron-ssr**，可以实现数据走系统代理
+但是类似于命令行等的数据并不走系统代理，因此需要通过**proxychains**完成相关的代理
+
+首先执行如下命令完成代理
+```bash
+sudo pacman -S proxychians
+```
+
+接着，需要修改全局代理链，将**/etc/proxychains.conf**文件的代理修改如下
+```bash
+[ProxyList]
+socks5  127.0.0.1 1080
+```
+
+上述端口为**electron-ssr**中监听的本地端口即可
+之后，通过`proxychains -q [待执行命令]`，完成代理
+
+
+
+
 ## 设置QEMU
 
 > **qemu**是一个广泛使用的开源计算机模拟器和虚拟机
@@ -459,77 +513,6 @@ sudo virt-manager
 #### 配置VirtIO guest tools
 
 为了启用主机和虚拟机之间的剪切板共享，需要在虚拟机中安装VirtIO guest tools，点击[https://www.spice-space.org/download/binaries/spice-guest-tools/](https://www.spice-space.org/download/binaries/spice-guest-tools/)下载安装即可
-
-
-## 设置SSR代理
-
-这里通过安装V2RAY代理，并通过其SSR插件实现SSR代理
-
-### 下载v2ray代理
-
-执行下列命令安装**v2ray**代理软件
-```bash
-yay -S v2ray
-```
-
-### 设置qv2ray代理
-
-为了操作方便，下载**qv2ray**，点击[https://github.com/Qv2ray/Qv2ray/releases](https://github.com/Qv2ray/Qv2ray/releases)链接进行下载
-
-执行如下命令完成安装
-```bash
-mv $(ls | grep "Qv2ray") qv2ray
-sudo chmod +x qv2ray
-```
-
-之后双击*qv2ray*图案，点击**Run Onece**，出现如下相关的界面
-![qv2ray初始界面](qv2ray初始界面.PNG)
-
-首先点击该界面左上角第二个**Plugins**按钮，使程序生成对应的插件目录
-然后点击右上角第一个**Preferencees**按钮，设置语言信息、连接信息、V2RAY核心可执行文件路径和V2RAY资源目录即可，如下所示
-![qv2ray常规设置](qv2ray常规设置.PNG)
-
-![qv2ray中v2ray相关设置](qv2ray中v2ray相关设置.PNG)
-
-### 配置qv2ray插件
-
-下载**qv2ray的ssr插件**，点击[https://github.com/Qv2ray/QvPlugin-SSR/releases](https://github.com/Qv2ray/QvPlugin-SSR/releases)链接进行下载
-
-执行如下命令，完成插件的安装
-```bash
-mv $(ls | grep "QvPlugin") ~/.config/qv2ray/plugins
-```
-
-### 订阅节点
-
-打开**qv2ray**代理
-![qv2ray初始界面](qv2ray初始界面.PNG)
-
-然后点击该界面左上角的**分组**按钮，编辑分组信息
-![qv2ray编辑分组信息](qv2ray编辑分组信息.PNG)
-
-最后在该界面右侧，输入相关的订阅地址，即可完成节点的订阅
-
-
-### 配置proxychains
-
-大部分时候，打开**qv2ray**，可以实现数据走系统代理
-但是部分命令行的数据并不走系统代理，因此需要通过**proxychains**完成相关的代理
-
-首先执行如下命令完成代理
-```bash
-sudo pacman -S proxychians
-```
-
-接着，需要修改全局代理链，将**/etc/proxychains.conf**文件的代理修改如下
-```bash
-[ProxyList]
-socks5  127.0.0.1 1089
-```
-
-上述端口为**qv2ray**中监听的端口即可
-之后，通过`proxychains -q [待执行命令]`，完成代理
-
 
 
 # 异常处理
