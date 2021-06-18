@@ -492,11 +492,8 @@ sudo chmod +x $(ls | grep "Qv2ray")
 ![qv2ray中v2ray相关设置](qv2ray中v2ray相关设置.PNG)
 
 
-
-最后执行下述命令，安装集合好的qv2ray文件
-```bash
-sudo ln -sf ~/qv2ray/$(ls ~/qv2ray | grep "Qv2ray") /usr/bin/qv2ray
-```
+之后可以通过点击屏幕左下角的`application launcher`，或者点击`Win`建，快速启动**qv2ray**，也可以将其拖拽到下方菜单栏，从而快速启动
+![qv2ray启动](qv2ray启动.PNG)
 
 ### 配置qv2ray插件
 
@@ -509,7 +506,7 @@ mv $(ls | grep "QvPlugin") ~/.config/qv2ray/plugins
 
 ### 订阅节点
 
-执行`qv2ray`，打开**qv2ray**代理
+打开**qv2ray**代理
 ![qv2ray初始界面](qv2ray初始界面.PNG)
 
 然后点击该界面左上角的**分组**按钮，编辑分组信息
@@ -520,7 +517,7 @@ mv $(ls | grep "QvPlugin") ~/.config/qv2ray/plugins
 
 ### 配置proxychains
 
-大部分时候，我们通过执行`qv2ray`，实现数据走系统代理
+大部分时候，打开**qv2ray**，可以实现数据走系统代理
 但是部分命令行的数据并不走系统代理，因此需要通过**proxychains**完成相关的代理
 
 首先执行如下命令完成代理
