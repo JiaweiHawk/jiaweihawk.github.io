@@ -164,8 +164,28 @@ sudo umount /mnt/usb
 
 # 系统配置
 
-## 分辨率
 
+
+## 换源
+
+  在konsole中输入如下bash命令
+```bash
+sudo pacman-mirrors -i -c China -m rank
+sudo pacman -Syy
+```
+  然后从弹出的框中选择一个最好的源即可
+
+## 安装yay
+
+  manjaro除了pacman以外，yay同样是重要的一个软件安装途径，如下进行安装和设置
+```bash
+sudo pacman -S yay
+yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
+```
+
+
+
+## 分辨率
 ### 系统dpi
 
   点击屏幕左下角的`application launcher`，或者点击`Win`建，打开`System Settings`，选择`Display Configuration`选项，通过设置**Resolution**和**Global scale**完成系统分辨率和DPI的设置
@@ -188,22 +208,6 @@ EnableHiDPI=true
 ServerArguments=-nolisten tcp -dpi 192
 ```
 
-## 换源
-
-  在konsole中输入如下bash命令
-```bash
-sudo pacman-mirrors -i -c China -m rank
-sudo pacman -Syy
-```
-  然后从弹出的框中选择一个最好的源即可
-
-## 安装yay
-
-  manjaro除了pacman以外，yay同样是重要的一个软件安装途径，如下进行安装和设置
-```bash
-sudo pacman -S yay
-yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
-```
 
 ## 安装vmtools(虚拟机中)
 
@@ -213,6 +217,8 @@ sudo pacman -S virtualbox-guest-utils open-vm-tools gtkmm gtkmm3
 sudo systemctl enable vmtoolsd
 ```
   然后重新启动计算机更新环境即可
+
+
 
 ## 安装输入法
 
@@ -230,6 +236,7 @@ XMODIFIERS    DEFAULT=\@im=fcitx
 ```
   <br>然后重启更新计算机环境
 
+
 ### 配置输入法
 
   点击右下角菜单栏的键盘托盘图标，点击`设置`，添加`rime`输入法
@@ -245,6 +252,18 @@ patch:
       reset: 1
       states: ["漢字", "汉字"]
 ```
+
+  创建**~/.config/fcitx5/conf/classicui.conf**，并输入如下内容调整输入框的字体设置
+```
+# 按屏幕 DPI 使用
+PerScreenDPI=True
+
+# Font (设置成你喜欢的字体)
+Font="Noto Sans Regular 13"
+```
+
+  
+
 
   然后切换至rime输入法，随便输入相关信息，并输入 `ctrl + ~`，切换至 **朙月拼音·简化字**输入法。最后，点击右下角菜单栏的键盘托盘图标，选择`deploy`重新部署rime输入法。
   然后重启更新计算机环境。
