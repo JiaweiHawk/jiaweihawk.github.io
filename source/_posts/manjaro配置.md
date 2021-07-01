@@ -283,6 +283,31 @@ Font="Noto Sans Regular 13"
   打开konsole，在界面上方的`Settings => Edit Current Profile`，选择`Appearance`，在**Font**对应字段进行设置即可
   ![设置konsole字体](设置konsole字体.PNG)
 
+
+## 设置护眼
+
+  这里使用跨平台的**Stretchly**软件，进行定时的息屏休息功能
+
+### 安装Stretchly
+
+  首先在[链接](https://github.com/hovancik/stretchly/releases)中，下载*Stretchly-[version].pacman*文件
+  
+  在konsole中执行如下bash命令，完成软件的安装
+```bash
+sudo pacman -U $(ls | grep "Stretchly")
+```
+
+### 配置Stretchly
+
+  首先，设置其为自动启动程序，即点击屏幕左下角的`application launcher`，或者点击`Win`建，打开`System Settings`，选择`Workspace => Startup and Shutdown => Autostart`选项，添加**Stretchly**项。
+
+  ![设置stretchly自动启动](自动启动stretchly.PNG)
+
+
+  接着启动*Stretchly*，完成软件的设置即可。即点击屏幕左下角的`application launcher`，或者点击`Win`建，在搜索框输入**Stretchly**，然后点击软件即可。之后按照软件的引导，完成相关的配置即可
+
+  ![启动stretchly](启动stretchly.PNG)
+
 ## 设置python
 
 ### 安装python3
