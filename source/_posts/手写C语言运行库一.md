@@ -405,7 +405,6 @@ void hawk_crt_heap_init(void) {
 
 #ifdef WIN32
 #include <Windows.h>
-
 //  生成包装的文件描述副
 static FILE *generate_file_descriptor(HANDLE fd, unsigned  int flag) {
 #else
@@ -415,7 +414,7 @@ static FILE *generate_file_descriptor(unsigned int fd, unsigned int flag) {
 
 
     FILE *file = (FILE*)malloc(sizeof(FILE) + BUFSIZE);
-    file->fd = fd;
+    file->fd = (unsigned int)fd;
     file->buf = (unsigned char*)file + BUFSIZE;
     file->bufAvailable = file->bufUnavailable = 0;
     file->bufSize = BUFSIZE;
@@ -480,7 +479,7 @@ int fclose(FILE *file) {
     if(file->flag == O_WRONLY) { fflush(file); }
 
 #ifdef WIN32
-    int res = CloseHandle(file->fd);
+    int res = CloseHandle((HANDLE)file->fd);
     if(res == 0) { return FCLOSE_ERROR; }
 #else
     int res = 0;
@@ -511,7 +510,7 @@ static int fread_from_buf(void *dst, int size, FILE *stream) {
 
         int read_size = 0;
 #ifdef WIN32
-        ReadFile(stream->fd, stream->buf + stream->bufAvailable, stream->bufSize - stream->bufUnavailable, &read_size, 0);
+        ReadFile((HANDLE)stream->fd, stream->buf + stream->bufAvailable, stream->bufSize - stream->bufUnavailable, &read_size, 0);
         if(!read_size) { return -1;}
 #else
         __asm__ __volatile__("movl $0x3, %%eax\n\t"
@@ -566,7 +565,7 @@ static int fwrite_to_buf(const void *dst, int size, FILE *stream) {
     if(stream->bufUnavailable == stream->bufSize) {
 
 #ifdef WIN32
-        WriteFile(stream->fd, stream->buf + stream->bufAvailable, stream->bufUnavailable - stream->bufAvailable, &write_size, 0);
+        WriteFile((HANDLE)stream->fd, stream->buf + stream->bufAvailable, stream->bufUnavailable - stream->bufAvailable, &write_size, 0);
 
 #else
         __asm__ __volatile__("movl $0x4, %%eax\n\t"
@@ -618,7 +617,7 @@ void fflush(FILE *stream) {
 
     int write_size = 0;
 #ifdef WIN32
-    WriteFile(stream->fd, stream->buf + stream->bufAvailable, stream->bufUnavailable - stream->bufAvailable, &write_size, 0);
+    WriteFile((HANDLE)stream->fd, stream->buf + stream->bufAvailable, stream->bufUnavailable - stream->bufAvailable, &write_size, 0);
 
 #else
     __asm__ __volatile__("movl $0x4, %%eax\n\t"
@@ -657,7 +656,7 @@ void hawk_crt_io_init(void) {
 ```
 
 
-### 格式化字符串
+## 格式化字符串
 
   为了最基本的输入、输出功能，我们实现一个简易版的**printf**/**fprintf**输出函数，以及**scanf**/**fscanf**输入函数，用来交互。这些都是最简易版的，基本只包括**%s**和**%d**参数，以方便实现。
 
