@@ -81,7 +81,7 @@ char (*(*x())[])();
 
 ## 顶层const
 
-  对于对象本身是一个常量，不可更改对象本身的值，则称为**顶层const**，如`int * const p1;`
+  对于对象本身是一个常量，不可更改对象本身的值，但在对像是指针或引用的情况下，可能修改其指向或引用的值，则称为**顶层const**，如`int * const p1;`
 
 ## 底层const
 
@@ -92,23 +92,26 @@ char (*(*x())[])();
   在使用时，**顶层const**和**底层const**差别十分大，这里简单说一下常见的差别
 
 1. 赋值、初始化
-  总体规则是**const**兼容**非const**
-  - 对于**顶层const**，对于赋值对象是否为**常量**没有任何关系，如下所示
+  - 对于**顶层const**，由于**const**可以兼容**非const**，因此对于赋值对象是否为**常量**不影响操作，如下所示
   ```c++
-int val1 = 0;
-int const val2 = 0;
+int *p1 = nullptr, *const p2 = nullptr;
 
-int const &r1 = val1, &r2 = val2;		//有效
-int const *p1 = &val1, *p2 = &val2;		//有效
+int *const p3 = p1, *const p4 = p2;	//有效，const兼容非const的p1
 ```
 
-  - 对于**底层const**，其赋值对象和被赋值对象必须有相同的**底层const**资格，如下所示
+  - 对于**底层const**，虽然**const**可以兼容**非const**，但是如果在**底层const**的情况下也进行兼容，可能会修改**const**类型的值，如下所示
   ```c++
-int const *p;
-
-int const * const &r1 = 0;	//有效
-int const * &r2 = p;		//有效
-int * const &r3 = p;		//无效，这里r3是引用指向整型的常指针，但是p是指向常量的指针。r3中其引用指向非常量，而p指向常量，因此不兼容
+const int val = 0;
+int *p1 = nullptr;
+int const **p2 = &p1;		//如果底层const可以被兼容，则&p1为指向变量的指针，p2为指向常量的指针，则p2可以兼容&p1
+*p2 = &val;			//此时p1指向了&val
+*p1 = 1;			//由于p1是指向变量的指针，因此其值可以进行改变，从而修改了常量val的值
+```
+  为了避免上面情况的发生，这里规定**底层const**不能兼容**非const**，如下所示
+  ```c++
+int const val = 0;
+int const &r1 = val, *const p1 = &val;	//有效，其底层const类型一致，顶层const可以兼容
+int * const *p2 = &val;		//无效，因为其底层const不一致：p2底层指向变量，而&val底层是常量
 ```
 
 # 注意点
@@ -120,7 +123,7 @@ typedef char *pstring
 
 
 const char * p1;
-const pstring p2;
+const pstring p2;	//相当于pstring const p2;
 ```
 
   如果仅仅将`typedef`当作简单的宏替换，那么`p2`的定义进行展开就是`p1`，其是一个指向**常量char**的指针，即`p1`的值可以进行任意的修改，但是`p1`指向的值不能进行修改
