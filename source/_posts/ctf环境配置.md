@@ -18,7 +18,7 @@ categories: ['信息安全']
   在终端中执行如下命令，完成gdb的安装
   ```bash
 sudo pacman -S gdb
-```
+  ```
 
 ### 插件配置
 
@@ -28,7 +28,7 @@ sudo pacman -S gdb
   ```bash
 sudo pacman -S pwndbg
 echo "source /usr/share/pwndbg/gdbinit.py" > ~/.gdbinit
-```
+  ```
 
 
 ### 常用命令
@@ -39,13 +39,15 @@ echo "source /usr/share/pwndbg/gdbinit.py" > ~/.gdbinit
   3. `break [address] if [condition]`，即当条件`condition`满足时，程序会在执行到`address`时停止
   4. `break *$rebase(address)`，即在装载基地址偏移`address`设立断点
   5. `dprintf *$rebase(address) "%d\n", $rax`，即当执行到`*$rebase(address)`地址处，输出相关的格式信息
+  6. `find [/SIZE-CHAR] START-ADDRESS, END-ADDRESS, EXPR1`，即在指定范围内寻找指定值和类型的数据，其中，**SIZE-CHAR**可选*b*、*h*、*w*、*g*，分别表示8bit、16bit、32bit和64bit
+  6. `![command]`，即在gdb中打开**shell**，执行*command*指令
 
 ### 命令执行
 
   除了手动一条一条命令的进行交互，也可以通过命令行，按照提前给定的指令依次执行，如下所示
   ```bash
 gdb [file] -ex [command1] -ex [command2] ...
-```
+  ```
   之后，gdb加载给定的目标程序，并按照参数顺序，依次在**GDB**中执行参数中传递的命令
 
 
@@ -55,7 +57,7 @@ gdb [file] -ex [command1] -ex [command2] ...
   这是专门用于CTF和漏洞利用的Python库，可以在终端中执行如下命令进行安装
   ```bash
 pip2 install pwntools
-```
+  ```
 
 
 ### PWN模板
@@ -70,11 +72,15 @@ import sys
 '''
 	待修改数据
 '''
-context(log_level = 'debug', arch = 'amd64', os = 'linux', terminal = ['konsole', '-e'])
+context.log_level = 'debug'
+context.arch = 'amd64'				# 32位使用i386
+context.os = 'linux'
+context.terminal = ['konsole', '-e']
+
 execve_file = None
 lib_file = None
-gdbscript = '''starti
-'''
+gdbscript = '''starti;'''
+argv = []
 
 
 
@@ -132,7 +138,8 @@ log.info('-----------------------------------------------------------')
 while True:
 	try:
 		if 'd' in sys.argv:
-			r = gdb.debug(execve_file, gdbscript)
+			#r = process([execve_file] + argv, env = {'LD_LIBRARY_PATH' : './'})
+			r = gdb.debug([execve_file] + argv, gdbscript, env = {'LD_LIBRARY_PATH' : './'})	# 首先加载当前目录下的动态库文件
 		else:
 			r = remote(sys.argv[1], sys.argv[2])
 
@@ -145,7 +152,7 @@ while True:
 
 	
 log.info('-----------------------------------------------------------')
-```
+  ```
 
 
 ## IDA
@@ -163,7 +170,7 @@ import ida_bytes
 	返回的是整形
 '''
 val = ida_bytes.get_byte(address)
-```
+  ```
 
 
 
