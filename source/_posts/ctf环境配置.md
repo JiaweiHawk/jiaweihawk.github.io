@@ -115,8 +115,9 @@ int 0x80		/*execve("/bin/sh")*/
 
 
 '''
-	elf.plt[`symbol`] 获取elf文件中符号的plt地址
-	elf.got[`symbol`] 获取elf文件中符号的got地址
+	elf.plt[`symbol`] 获取elf文件中导入符号的plt地址
+	elf.got[`symbol`] 获取elf文件中导入符号的got地址
+	elf.sym['symbol'] 获取elf文件中本地符号的函数实际地址
 '''
 if execve_file != None:
 	elf = ELF(execve_file)
