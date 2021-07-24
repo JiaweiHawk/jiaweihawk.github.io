@@ -16,6 +16,7 @@ categories: ['信息安全']
 
   再做*PWN*题目的时候，需要进行相关的调试，这就需要Linux中的**GDB**进行辅助。
   在终端中执行如下命令，完成gdb的安装
+
   ```bash
 sudo pacman -S gdb
   ```
@@ -30,6 +31,17 @@ sudo pacman -S pwndbg
 echo "source /usr/share/pwndbg/gdbinit.py" > ~/.gdbinit
   ```
 
+  对于**Ubuntu**来说，执行如下命令
+  ```bash
+git config --global url."https://hub.fastgit.org/".insteadOf "https://github.com/"
+
+git clone https://github.com/pwndbg/pwndbg
+cd pwndbg
+./setup.sh
+
+git config --global --unset url."https://hub.fastgit.org/".insteadOf
+  ```
+
 
 ### 常用命令
 
@@ -40,7 +52,8 @@ echo "source /usr/share/pwndbg/gdbinit.py" > ~/.gdbinit
   4. `break *$rebase(address)`，即在装载基地址偏移`address`设立断点
   5. `dprintf *$rebase(address) "%d\n", $rax`，即当执行到`*$rebase(address)`地址处，输出相关的格式信息
   6. `find [/SIZE-CHAR] START-ADDRESS, END-ADDRESS, EXPR1`，即在指定范围内寻找指定值和类型的数据，其中，**SIZE-CHAR**可选*b*、*h*、*w*、*g*，分别表示8bit、16bit、32bit和64bit
-  6. `![command]`，即在gdb中打开**shell**，执行*command*指令
+  7. `p *(struct s*)(address)`，即将*address*地址处的变量当作**struct s**结构体的指针，并打印出具体的结构体信息
+  8. `![command]`，即在gdb中打开**shell**，执行*command*指令
 
 ### 命令执行
 
@@ -59,6 +72,12 @@ gdb [file] -ex [command1] -ex [command2] ...
 pip2 install pwntools
   ```
 
+  对于**Ubuntu**系统，其一般没有*pip2*，需要首先单独进行安装，执行如下命令
+  ```bash
+curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
+sudo python2 get-pip.py
+  ```
+
 
 ### PWN模板
 
@@ -68,6 +87,7 @@ pip2 install pwntools
 # -*- coding:utf-8 -*-
 from pwn import *
 import sys
+import platform
 
 '''
 	待修改数据
@@ -75,7 +95,9 @@ import sys
 context.log_level = 'debug'
 context.arch = 'amd64'				# 32位使用i386
 context.os = 'linux'
-context.terminal = ['konsole', '-e']
+
+if 'MANJARO' in platform.platform():
+	context.terminal = ['konsole', '-e']
 
 execve_file = None
 lib_file = None
