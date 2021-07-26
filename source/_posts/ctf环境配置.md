@@ -15,10 +15,10 @@ categories: ['信息安全']
 ## GDB调试器
 
   再做*PWN*题目的时候，需要进行相关的调试，这就需要Linux中的**GDB**进行辅助。
-  在终端中执行如下命令，完成gdb的安装
+  在终端中执行如下命令，完成gdb和32位环境
 
   ```bash
-sudo pacman -S gdb
+sudo pacman -S gdb libc6-dev-i386
   ```
 
 ### 插件配置
@@ -26,6 +26,7 @@ sudo pacman -S gdb
   为了方便调试*PWN*题目，需要为**GDB**安装相关插件，有**[peda](https://github.com/longld/peda)**、**[gef](https://github.com/hugsy/gef)**和**[pwndbg](https://github.com/pwndbg/pwndbg)**可以进行选择
   可以点击上面的链接，根据官网的指导进行相关的安装。由于个人对于**pwndbg**比较熟悉，因此以**pwndbg**的安装过程为例
   在终端中执行如下命令
+
   ```bash
 sudo pacman -S pwndbg
 echo "source /usr/share/pwndbg/gdbinit.py" > ~/.gdbinit
@@ -158,15 +159,19 @@ log.info('-----------------------------------------------------------')
 	只有当成功获取shell或者键盘Ctrl+C退出时，程序中止循环
 	否则程序一直进行循环
 '''
+
+
+def exp():
+	if 'd' in sys.argv:
+		r = gdb.debug([execve_file] + argv, gdbscript, env = {'LD_LIBRARY_PATH' : './'})	# 首先加载当前目录下的动态库文件
+	else:
+		r = remote(sys.argv[1], sys.argv[2])
+
+	r.interactive()
+
 while True:
 	try:
-		if 'd' in sys.argv:
-			#r = process([execve_file] + argv, env = {'LD_LIBRARY_PATH' : './'})
-			r = gdb.debug([execve_file] + argv, gdbscript, env = {'LD_LIBRARY_PATH' : './'})	# 首先加载当前目录下的动态库文件
-		else:
-			r = remote(sys.argv[1], sys.argv[2])
-
-		r.interactive()
+		exp()
 		break
 	except KeyboardInterrupt:
 		break

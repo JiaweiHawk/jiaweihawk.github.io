@@ -182,16 +182,20 @@ sudo pacman -Syy
 sudo pacman -S yay
 yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
 ```
-
+  yay镜像有连接次数限制，因此有时需要恢复成原始资源网站，即
+```bash
+yay --aururl "https://aur.archlinux.org" --save
+```
 
 ## 安装neovim
 
   使用neovim作为系统的文本编辑器，在终端输入如下命令
   ```bash
 sudo pacman -S neovim xsel
-ln -sf /usr/bin/nvim /usr/bin/vi
+sudo ln -sf /usr/bin/nvim /usr/bin/vi
 mkdir ~/.config/nvim
-echo -n "set clipboard+=unnamedplus" > ~/.config/nvim/init.vim
+echo "set clipboard+=unnamedplus
+let g:python_recommended_style = 0" > ~/.config/nvim/init.vim
 ```
 
 
@@ -208,7 +212,8 @@ echo -n "set clipboard+=unnamedplus" > ~/.config/nvim/init.vim
 
 ### 登录窗口dpi
 
-  即manajaro登录界面的dpi，这里通过编辑sddm的设置文件——即`/etc/sddm.conf`完成，添加或修改如下项的值
+  即manajaro登录界面的dpi，这里通过编辑sddm的设置文件——即`\etc\sddm.conf`完成，添加或修改如下项的值
+
 ```conf
 [Wayland]
 EnableHiDPI=true
@@ -264,7 +269,7 @@ patch:
 ```
 
   创建**~/.config/fcitx5/conf/classicui.conf**，并输入如下内容调整输入框的字体设置
-```
+```conf
 # 按屏幕 DPI 使用
 PerScreenDPI=True
 
@@ -301,7 +306,7 @@ Font="Noto Sans Regular 13"
 ### 安装Stretchly
 
   首先在[链接](https://github.com/hovancik/stretchly/releases)中，下载*Stretchly-[version].pacman*文件
-  
+
   在konsole中执行如下bash命令，完成软件的安装
 ```bash
 sudo pacman -U $(ls | grep "Stretchly")
@@ -332,14 +337,14 @@ sudo pacman -U $(ls | grep "Stretchly")
 
 在konsole中执行如下bash命令
 ```bash
-sudo pacman -S python2
+sudo pacman -S python
 ```
 
 ### 安装pip2
 
 在konsole中执行如下bash命令
 ```bash
-sudo pacman -S python2-pip
+sudo pacman -S python-pip
 ```
 
 ### 配置pip
@@ -352,6 +357,18 @@ python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/sim
 python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
 python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 ```
+
+  有时python的pip会出现相关的错误信息，则执行如下命令重新安装pip
+```bash
+wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
+python2 get-pip.py 
+rm -rf get-pip.py
+
+wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
+python3 get-pip.py 
+rm -rf get-pip.py
+```
+  然后再执行上述的命令即可
 
 ## 设置C/C++
 在konsole中执行如下bash命令
@@ -420,12 +437,25 @@ chmod 700 -R ~/.ssh
 
 ### 下载electron-ssr代理
 
-从[https://github.com/shadowsocksrr/electron-ssr/releases](https://github.com/shadowsocksrr/electron-ssr/releases)点击下载** \*.pacman**文件
-
-执行下列文件，完成**electron-ssr**的安装
+我们执行如下命令安装代理
 ```bash
-sudo pacman -U $(ls | grep "pacman") && sudo rm -rf $(ls | grep "pacman")
+sudo pacman -S fakeroot
+git config --global url."https://hub.fastgit.org/".insteadOf "https://github.com/"
+yay --editor vi --editmenu -S electron-ssr-preview
+git config --global --unset url."https://hub.fastgit.org/".insteadOf
 ```
+
+  考虑到其下载和安装时大量使用到外网资源，我们需要编辑一下相关的**PKGBUILD**设置，更换**github**资源和**yarn**资源：
+```
+github.com => hub.fastgit.org
+raw.githubusercontent.com => raw.fastgit.org
+
+build() 开始在如下位置添加前两行
+    yarn config set registry https://registry.npm.taobao.org
+    yarn config set disturl https://npm.taobao.org/dist
+    yarn
+```
+
 
 可以点击屏幕左下角的`application launcher`，或者点击`Win`建，打开`All Applications`，即可找到**electron-ssr**，同时可以将其拖拽到菜单中，方便打开
 ![安装electron-ssr](安装electron-ssr.PNG)
