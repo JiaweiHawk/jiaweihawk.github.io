@@ -69,7 +69,7 @@ gdb [file] -ex [command1] -ex [command2] ...
 
   这是专门用于CTF和漏洞利用的Python库，可以在终端中执行如下命令进行安装
   ```bash
-pip2 install pwntools
+python2 -m pip -i https://pypi.tuna.tsinghua.edu.cn/simple install pwntools
   ```
 
   对于**Ubuntu**系统，其一般没有*pip2*，需要首先单独进行安装，执行如下命令

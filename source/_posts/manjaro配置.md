@@ -184,6 +184,16 @@ yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
 ```
 
 
+## 安装neovim
+
+  使用neovim作为系统的文本编辑器，在终端输入如下命令
+  ```bash
+sudo pacman -S neovim xsel
+ln -sf /usr/bin/nvim /usr/bin/vi
+mkdir ~/.config/nvim
+echo -n "set clipboard+=unnamedplus" > ~/.config/nvim/init.vim
+```
+
 
 ## 分辨率
 ### 系统dpi
@@ -336,11 +346,11 @@ sudo pacman -S python2-pip
 
 在konsole中执行如下bash命令
 ```bash
-pip2 install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
-pip2 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+python2 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
+python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
-pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
-pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
+python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ## 设置C/C++
@@ -562,7 +572,7 @@ sudo virt-manager
 
 # 异常处理
 
-## Failed to start Load/Save Screen Backlight Brightness of backlight:acpi_video0
+## Failed to start Load/Save Screen Backlight Brightness of backlight:acpi\_video0
 
   这里实际上系统使用了两种服务保存并载入背光设置，一个为`systemd-backlight@backlight:acpi_video0`；另一个为`systemd-backlight@backlight:amdgpu_b10`。对于AMD集显来说，第一个出错，会使用第二种设置，则直接mask掉第一个服务即可，在konsole中执行如下bash命令
 ```bash
