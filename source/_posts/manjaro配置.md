@@ -266,6 +266,76 @@ patch:
     - name: zh_simp
       reset: 1
       states: ["漢字", "汉字"]
+  punctuator:
+    import_preset: default
+    half_shape:
+      "," : { commit: "," }
+      "." : { commit: "." }
+      "<" : "<"
+      ">" : ">"
+      "/" : "/"
+      "?" : { commit: "?" }
+      ";" : { commit: ";" }
+      ":" : { commit: ":" }
+      "'" : "'"
+      "\"" : "\""
+      "\\" : "\\"
+      "|" : "|"
+      "`" : "`"
+      "~" : "~"
+      "!" : { commit: "!" }
+      "@" : "@"
+      "#" : "#"
+      "%" : "%"
+      "$" : "$"
+      "^" : "^"
+      "&" : "&"
+      "*" : "*"
+      "(" : "("
+      ")" : ")"
+      "-" : "-"
+      "_" : "_"
+      "+" : "+"
+      "=" : "="
+      "[" : "["
+      "]" : "]"
+      "{" : "{"
+      "}" : "}"
+      full_shape:
+      "\\" : "、"
+      " " : "　"
+      "," : ，
+      "." : 。
+      "<" : [ 《, 〈 ]
+      ">" : [ 》, 〉 ]
+      "/" : "/"
+      "?" : { commit: ？ }
+      ";" : { commit: ； }
+      ":" : ：
+      "'" : { pair: [ "‘", "’" ] }
+      "\"" : { pair: [ "“", "”" ] }
+      "\\" : 、
+      "|" : "|"
+      "`" : ｀
+      "~" : "~"
+      "!" : { commit: ！ }
+      "@" : "@"
+      "#" : "#"
+      "%" : "%"
+      "$" : "$"
+      "^" : { commit: …… }
+      "&" : "&"
+      "*" : "*"
+      "(" : （
+      ")" : ）
+      "-" : "-"
+      "_" : ——
+      "+" : "+"
+      "=" : "="
+      "[" : "["
+      "]" : "]"
+      "{" : "{"
+      "}" : "}"
 ```
 
   创建**~/.config/fcitx5/conf/classicui.conf**，并输入如下内容调整输入框的字体设置
@@ -604,7 +674,8 @@ sudo virt-manager
 
 ## Failed to start Load/Save Screen Backlight Brightness of backlight:acpi\_video0
 
-  这里实际上系统使用了两种服务保存并载入背光设置，一个为`systemd-backlight@backlight:acpi_video0`；另一个为`systemd-backlight@backlight:amdgpu_b10`。对于AMD集显来说，第一个出错，会使用第二种设置，则直接mask掉第一个服务即可，在konsole中执行如下bash命令
+这里实际上系统使用了两种服务保存并载入背光设置，一个为`systemd-backlight@backlight:acpi_video0`；另一个为`systemd-backlight@backlight:amdgpu_b10`。对于AMD集显来说，第一个出错，会使用第二种设置，则直接mask掉第一个服务即可，在konsole中执行如下bash命令
+
 ```bash
 sudo systemctl mask systemd-backlight@backlight:acpi_video0
 ```
