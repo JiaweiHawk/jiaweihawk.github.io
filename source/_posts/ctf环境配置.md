@@ -12,6 +12,58 @@ categories: ['信息安全']
 
 # 二进制
 
+## PWN环境
+
+  由于一般PWN题目涉及到各种**Glibc**版本，因此为了搭建环境方便起见，使用**Docker**来配置PWN题目所需要的各种镜像
+
+### 安装docker
+
+  在终端中执行如下命令，安装**docker**并启动**docker服务**，
+  ```bash
+sudo pacman -S docker
+sudo systemctl start docker
+sudo systemctl enable docker
+```
+
+### 更换docker镜像源
+
+  由于docker拉取镜像时，默认从**docker hub**上拉取，速度较慢，因此更换为国内的镜像仓库，创建**/etc/docker/daemon.json**文件，
+  ```json
+{
+ "registry-mirrors" : [
+   "https://mirror.ccs.tencentyun.com",
+   "http://registry.docker-cn.com",
+   "http://docker.mirrors.ustc.edu.cn",
+   "http://hub-mirror.c.163.com"
+ ],
+ "insecure-registries" : [
+   "registry.docker-cn.com",
+   "docker.mirrors.ustc.edu.cn"
+ ],
+ "debug" : true,
+ "experimental" : true
+}
+```
+
+  然后重启**docker**服务更新设置，即执行如下命令
+  ```bash
+sudo systemctl restart docker
+```
+
+### 设置用户组
+
+  由于**docker**进程基本都以**root**账户的身份进行运行，因此将当前用户添加入**docker**用户组，避免之后每次执行命令都需要添加**sudo**
+  ```bash
+sudo usermod -aG docker ${USER}
+```
+
+### 拉取Ubuntu镜像
+
+  这里采用主流的**Ubuntu**镜像，作为PWN环境的宿主系统，其**Dockerfile**如下所示
+  ```dockerfile
+FROM UBUNTU:20.04
+```
+
 ## GDB调试器
 
   再做*PWN*题目的时候，需要进行相关的调试，这就需要Linux中的**GDB**进行辅助。
