@@ -196,7 +196,7 @@ sudo ln -sf /usr/bin/nvim /usr/bin/vi
 mkdir ~/.config/nvim
 echo "set clipboard+=unnamedplus
 let g:python_recommended_style = 0" > ~/.config/nvim/init.vim
-```
+  ```
 
 
 ## 分辨率
@@ -397,11 +397,13 @@ python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/sim
 
   有时python的pip会出现相关的错误信息，则执行如下命令重新安装pip
 ```bash
-wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
+wget --no-check-certificate https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
 python2 get-pip.py 
 rm -rf get-pip.py
+python2 -m pip install pathlib2
 
-wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
+
+wget --no-check-certificate https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
 python3 get-pip.py 
 rm -rf get-pip.py
 ```

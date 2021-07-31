@@ -25,6 +25,7 @@ sudo systemctl start docker
 sudo systemctl enable docker
 ```
 
+
 ### 更换docker镜像源
 
   由于docker拉取镜像时，默认从**docker hub**上拉取，速度较慢，因此更换为国内的镜像仓库，创建**/etc/docker/daemon.json**文件，
@@ -48,7 +49,7 @@ sudo systemctl enable docker
   然后重启**docker**服务更新设置，即执行如下命令
   ```bash
 sudo systemctl restart docker
-```
+  ```
 
 ### 设置用户组
 
@@ -57,44 +58,125 @@ sudo systemctl restart docker
 sudo usermod -aG docker ${USER}
 ```
 
-### 拉取Ubuntu镜像
+### 获取docker镜像
 
-  这里采用主流的**Ubuntu**镜像，作为PWN环境的宿主系统，其**Dockerfile**如下所示
-  ```dockerfile
-FROM UBUNTU:20.04
+
+ #### 直接拉取
+
+  这里已经提前建好了一些仓库，执行如下命令进行拉取
+  ```bash
+docker pull h4wk1ns/ctf:pwn
 ```
+
+ #### 重新构建
+
+  这里采用主流的**Ubuntu**镜像，作为PWN环境的宿主系统，使用**Dockerfile**快速构建相关的镜像，可以点击查看[Dockerfile说明](https://docs.docker.com/engine/reference/builder/)
+
+  基本的样例镜像如下所示
+```dockerfile
+# Example for dockerfile
+FROM ubuntu:20.04
+
+
+
+# 下载需要安装的依赖和软件
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
+	&& sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
+	&& apt-get clean \
+	&& apt-get update \
+	&& DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y python python-dev python3 python3-distutils \
+	gdb patchelf \
+	gcc gcc-multilib g++-multilib nasm \
+	git neovim wget curl tmux
+
+
+# 设置neovim
+RUN ln -sf /usr/bin/nvim /usr/bin/vi
+
+
+# 设置python2
+RUN wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py \
+	&& python2 get-pip.py \
+	&& rm -rf get-pip.py \
+	&& python2 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U \
+	&& python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+# 设置python3
+RUN wget https://bootstrap.pypa.io/pip/get-pip.py \
+	&& python3 get-pip.py \
+	&& rm -rf get-pip.py \
+	&& python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U \
+	&& python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+
+# 安装pwntools
+RUN python2 -m pip install pathlib2 pwntools
+
+
+
+# 配置pwndbg
+RUN git clone https://hub.fastgit.org/pwndbg/pwndbg /usr/bin/pwndbg \
+	&& (cd /usr/bin/pwndbg && ./setup.sh)
+
+
+
+# 配置tmux，方便进行分屏调试
+RUN echo 'set-option -g mouse on' > /etc/tmux.conf
+
+
+
+# 创建相关目录，之后会将主机上指定目录进行挂载，并设置为工作目录
+RUN mkdir ctf
+
+
+# 进入容器的bash目录位于/ctf中
+WORKDIR /ctf
+
+
+
+# 由于pwntools执行debug，必须先提前开启tmux，因此直接设置初始执行程序为tmux即可
+CMD ["tmux"]
+```
+
+  接着，在终端执行如下命令，构建**docker**镜像
+  ```bash
+docker build -t ctf .
+```
+
+
+ 为了以后方便拉取，我们将其推送到**docker hub**中的个人账户即可，
+  在终端中登录**docker hub**的账户，如下
+  ```bash
+docker login
+```
+
+  最后，使用`tag`命令，将镜像名称进行规范化，并最终完成**docker hub**的推送，其命令如下
+  ```bash
+docker tag [local-repo] h4wk1ns/ctf:pwn
+docker push h4wk1ns/ctf:pwn
+```
+
+### 运行容器
+  当我们需要在当前目录下进入该环境时，执行如下命令
+  ```bash
+docker run -it -v $(pwd):/ctf 
+```
+
+
+### 删除容器
+  当我们使用完环境，要删除该容器时，执行如下命令
+  ```bash
+docker rm $(docker ps -a | grep "ctf" | awk '{print $1}')
+```
+
+
+
 
 ## GDB调试器
 
   再做*PWN*题目的时候，需要进行相关的调试，这就需要Linux中的**GDB**进行辅助。
-  在终端中执行如下命令，完成gdb和32位环境
-
-  ```bash
-sudo pacman -S gdb libc6-dev-i386
-  ```
-
-### 插件配置
-
-  为了方便调试*PWN*题目，需要为**GDB**安装相关插件，有**[peda](https://github.com/longld/peda)**、**[gef](https://github.com/hugsy/gef)**和**[pwndbg](https://github.com/pwndbg/pwndbg)**可以进行选择
-  可以点击上面的链接，根据官网的指导进行相关的安装。由于个人对于**pwndbg**比较熟悉，因此以**pwndbg**的安装过程为例
-  在终端中执行如下命令
-
-  ```bash
-sudo pacman -S pwndbg
-echo "source /usr/share/pwndbg/gdbinit.py" > ~/.gdbinit
-  ```
-
-  对于**Ubuntu**来说，执行如下命令
-  ```bash
-git config --global url."https://hub.fastgit.org/".insteadOf "https://github.com/"
-
-git clone https://github.com/pwndbg/pwndbg
-cd pwndbg
-./setup.sh
-
-git config --global --unset url."https://hub.fastgit.org/".insteadOf
-  ```
-
 
 ### 常用命令
 
@@ -113,24 +195,14 @@ git config --global --unset url."https://hub.fastgit.org/".insteadOf
   除了手动一条一条命令的进行交互，也可以通过命令行，按照提前给定的指令依次执行，如下所示
   ```bash
 gdb [file] -ex [command1] -ex [command2] ...
-  ```
+```
   之后，gdb加载给定的目标程序，并按照参数顺序，依次在**GDB**中执行参数中传递的命令
 
 
 
 ## pwntools库
 
-  这是专门用于CTF和漏洞利用的Python库，可以在终端中执行如下命令进行安装
-  ```bash
-python2 -m pip -i https://pypi.tuna.tsinghua.edu.cn/simple install pwntools
-  ```
-
-  对于**Ubuntu**系统，其一般没有*pip2*，需要首先单独进行安装，执行如下命令
-  ```bash
-curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
-sudo python2 get-pip.py
-  ```
-
+  这是专门用于CTF和漏洞利用的Python库
 
 ### PWN模板
 
@@ -148,9 +220,7 @@ import platform
 context.log_level = 'debug'
 context.arch = 'amd64'				# 32位使用i386
 context.os = 'linux'
-
-if 'MANJARO' in platform.platform():
-	context.terminal = ['konsole', '-e']
+context.terminal = ['tmux', 'splitw', '-h']
 
 execve_file = None
 lib_file = None
@@ -232,7 +302,7 @@ while True:
 
 	
 log.info('-----------------------------------------------------------')
-  ```
+```
 
 
 ## IDA
