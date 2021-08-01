@@ -7,7 +7,7 @@ categories: ['信息安全']
 
 # 前言
 
-  为了方便，将CTF的环境配置进行总结，方便日后快速回复环境等
+  为了方便，将CTF的环境配置进行总结，方便日后快速恢复环境等
 
 
 # 二进制
@@ -49,7 +49,7 @@ sudo systemctl enable docker
   然后重启**docker**服务更新设置，即执行如下命令
   ```bash
 sudo systemctl restart docker
-  ```
+```
 
 ### 设置用户组
 
@@ -63,9 +63,11 @@ sudo usermod -aG docker ${USER}
 
  #### 直接拉取
 
-  这里已经提前建好了一些仓库，执行如下命令进行拉取
+  这里已经提前建好了相关的镜像，执行如下命令进行拉取
   ```bash
-docker pull h4wk1ns/ctf:pwn
+docker pull h4wk1ns/ctf:pwn &&
+docker tag h4wk1ns/ctf:pwn pwn &&
+docker rmi h4wk1ns/ctf:pwn
 ```
 
  #### 重新构建
@@ -149,6 +151,7 @@ docker build -t ctf .
  为了以后方便拉取，我们将其推送到**docker hub**中的个人账户即可，
   在终端中登录**docker hub**的账户，如下
   ```bash
+docker logout
 docker login
 ```
 
@@ -158,10 +161,15 @@ docker tag [local-repo] h4wk1ns/ctf:pwn
 docker push h4wk1ns/ctf:pwn
 ```
 
+  实际上在生成镜像的过程中，产生了非常多的中间镜像，可以将所有的镜像进行全部删除，之后在拉取，执行如下命令即可
+  ```bash
+docker rmi $(docker images -a -q)
+```
+
 ### 运行容器
   当我们需要在当前目录下进入该环境时，执行如下命令
   ```bash
-docker run -it -v $(pwd):/ctf 
+docker run -it -v $(pwd):/ctf pwn
 ```
 
 
@@ -171,8 +179,50 @@ docker run -it -v $(pwd):/ctf
 docker rm $(docker ps -a | grep "ctf" | awk '{print $1}')
 ```
 
+## patchelf
+
+  **CTF**的**PWN**类型题目中，会有复杂的动态链接库和依赖关系，我们需要修改这些二进制的信息，使其可以在本地环境下正常运行，可以通过**patchelf**程序进行实现。
+
+### dynamic loader
+
+  如果没有正确的动态载入器，我们会导致程序执行错误或无法找到程序，因此可以通过如下命令修改指定的动态载入器地址
+  ```bash
+patchelf --set-interpreter [path] [execute]
+```
+
+### runtime path
+
+  有时程序需要使用特殊的动态链接库，因此其指定了动态链接库的首要查找路径，即**runtime path(rpath)**。我们在本地可以通过修改**rpath**字段的值，从而让其在本地的对应路径下去寻找动态链接库，命令如下
+  ```bash
+patchelf --set-rpath [path] [execute]
+```
 
 
+## LD_*环境变量
+
+  由于程序的动态链接和依赖关系十分的复杂，因此linux本身也提供了一些环境变量，方便进行程序动态链接和依赖的查找和调试
+
+### LD_DEBUG
+
+  实际上通过设置**LD_DEBUG**变量，可以方便的调试程序动态链接的各种过程，比如
+  
+ ```bash
+LD_DEBUG=libs [execute]
+```
+
+  终端会输出程序寻找动态库的全过程，然后接着是正常的执行过程。
+
+  **LD_DEBUG**中包含多个可选的值，如**libs**、**symbols**等，可以通过设置**help**值，然后屏幕会输出所有的可选项及其含义。
+
+
+### LD_LIBRARY_PATH
+
+  类似于前面的**runtime path**，但是优先级次一级。即程序运行前，在查找动态链接库时，会首先在指定的**rpath**路径下查找；然后在指定的**LD_LIBRARY_PATH**路径下查找；最后在系统的默认路径下进行查找
+
+  其命令执行形式如下所示
+  ```bash
+LD_LIBRARY_PATH=[path] [execute]
+```
 
 ## GDB调试器
 
