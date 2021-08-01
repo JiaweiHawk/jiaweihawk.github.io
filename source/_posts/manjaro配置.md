@@ -224,15 +224,6 @@ ServerArguments=-nolisten tcp -dpi 192
 ```
 
 
-## 安装vmtools(虚拟机中)
-
-  在konsole中输入如下bash命令
-```bash
-sudo pacman -S virtualbox-guest-utils open-vm-tools gtkmm gtkmm3
-sudo systemctl enable vmtoolsd
-```
-  然后重新启动计算机更新环境即可
-
 
 
 ## 安装输入法
@@ -258,52 +249,61 @@ SDL_IM_MODULE DEFAULT=fcitx
 
   点击右下角菜单栏的键盘托盘图标，点击`设置`，添加`rime`输入法
   ![配置输入法](配置输入法.PNG)
-  创建 **~/.local/share/fcitx5/rime/luna_pinyin_simp.custom.yaml**，并输入如下内容
-```
+  首先创建**~/.local/share/fcitx5/rime/default.custom.yaml**，并输入如下内容
+  ```yaml
+patch:
+  schema_list:
+    - schema: luna_pinyin_simp
+  ```
+  接着创建**~/.local/share/fcitx5/rime/luna_pinyin_simp.custom.yaml**，并输入如下内容
+```yaml
 patch:
   switches:
     - name: ascii_mode
       reset: 1
       states: ["中文", "西文"]
+    - name: full_shape
+      reset: 0
+      states: ["半角", "全角"]
     - name: zh_simp
       reset: 1
-      states: ["漢字", "汉字"]
-
-  # 半角是中文下的状态
-  "punctuator/half_shape":
-    ',' : { commit: '，' }
-    '.' : { commit: '。' }
-    '<' : '《'
-    '>' : '>'
-    '/' : '/'
-    '?' : { commit: '?' }
-    ';' : { commit: ';' }
-    ':' : { commit: ':' }
-    "'" : "'"
-    '"' : '"'
-    '\' : '、'
-    '|' : '|'
-    '`' : { commit: '`' }
-    '~' : '~'
-    '!' : { commit: '!' }
-    '@' : '@'
-    '#' : '#'
-    '%' : '%'
-    '$' : '$'
-    '^' : '^'
-    '&' : '&'
-    '*' : '*'
-    '(' : '('
-    ')' : ')'
-    '-' : '-'
-    '_' : '_'
-    '+' : '+'
-    '=' : '='
-    '[' : '['
-    ']' : ']'
-    '{' : '{'
-    '}' : '}'
-
+      states: ["繁體", "简体"]
+      
+  recognizer/patterns:
+    reverse_lookup: "[a-z]*'?$"
+    
+  punctuator/half_shape:
+    "," : "，"
+    "." : "。"
+    "<" : "《"
+    ">" : ">"
+    "/" : "/"
+    "?" : "?"
+    ";" : ";"
+    ":" : ":"
+    "\"" : "\""
+    "\\": "、"
+    "|" : "|"
+    "`" : "`"
+    "~" : "~"
+    "!" : "!"
+    "@" : "@"
+    "#" : "#"
+    "%" : "%"
+    "$" : "$"
+    "^" : "^"
+    "&" : "&"
+    "*" : "*"
+    "(" : "("
+    ")" : ")"
+    "-" : "-"
+    "_" : "_"
+    "+" : "+"
+    "=" : "="
+    "[" : "["
+    "]" : "]"
+    "{" : "{"
+    "}" : "}"
 ```
 
   创建**~/.config/fcitx5/conf/classicui.conf**，并输入如下内容调整输入框的字体设置
@@ -374,14 +374,14 @@ sudo pacman -U $(ls | grep "Stretchly")
 
 在konsole中执行如下bash命令
 ```bash
-sudo pacman -S python
+sudo pacman -S python2
 ```
 
 ### 安装pip2
 
 在konsole中执行如下bash命令
 ```bash
-sudo pacman -S python-pip
+sudo pacman -S python2-pip
 ```
 
 ### 配置pip
@@ -422,6 +422,13 @@ sudo pacman -S jdk11-openjdk
 ```
 
 ## 设置Git
+
+### 安装git
+
+  在终端下执行如下命令继续安装
+```bash
+sudo pacman -S git
+```
 
 ### 初始化用户信息
 
@@ -476,24 +483,10 @@ chmod 700 -R ~/.ssh
 
 ### 下载electron-ssr代理
 
-我们执行如下命令安装代理
-```bash
-sudo pacman -S fakeroot
-git config --global url."https://hub.fastgit.org/".insteadOf "https://github.com/"
-yay --editor vi --editmenu -S electron-ssr-preview
-git config --global --unset url."https://hub.fastgit.org/".insteadOf
-```
-
-  考虑到其下载和安装时大量使用到外网资源，我们需要编辑一下相关的**PKGBUILD**设置，更换**github**资源和**yarn**资源：
-```
-github.com => hub.fastgit.org
-raw.githubusercontent.com => raw.fastgit.org
-
-build() 开始在如下位置添加前两行
-    yarn config set registry https://registry.npm.taobao.org
-    yarn config set disturl https://npm.taobao.org/dist
-    yarn
-```
+  在如下[链接](https://github.com/shadowsocksrr/electron-ssr/releases)，下载**electron-ssr*.pacman**文件，然后执行如下程序进行安装
+  ```bash
+sudo pacman -U $(ls | grep "electron-ssr*") && rm -rf $(ls | grep "electron-ssr")
+  ```
 
 
 可以点击屏幕左下角的`application launcher`，或者点击`Win`建，打开`All Applications`，即可找到**electron-ssr**，同时可以将其拖拽到菜单中，方便打开
