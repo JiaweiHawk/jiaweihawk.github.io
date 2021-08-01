@@ -411,7 +411,7 @@ footer:
   owner:
     enable: true
     since: 2021
-  custom_text: "come to pwn me!!"
+  custom_text: "come to hack me!!"
   copyright: false # Copyright of theme and framework
 
 # Analysis
@@ -647,7 +647,7 @@ aside:
       link: https://github.com/JiaweiHawk
   card_announcement:
     enable: false
-    content: "This is hawk's blog"
+    content: "This is H4wk1ns's blog"
   card_recent_post:
     enable: true
     limit: 5 # if set 0 will show all
