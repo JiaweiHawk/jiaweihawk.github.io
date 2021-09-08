@@ -65,9 +65,9 @@ sudo usermod -aG docker ${USER}
 
   这里已经提前建好了相关的镜像，执行如下命令进行拉取
   ```bash
-docker pull h4wk1ns/pwn:[glibc24]/[glibc27]/[glibc31] &&
-docker tag h4wk1ns/pwn:[glibc24]/[glibc27]/[glibc31] [pwn24]/[pwn27]/[pwn31] &&
-docker rmi h4wk1ns/pwn:[glibc24]/[glibc27]/[glibc31] 
+docker pull h4wk1ns/pwn:[glibc23]/[glibc27]/[glibc31] &&
+docker tag h4wk1ns/pwn:[glibc23]/[glibc27]/[glibc31] [pwn23]/[pwn27]/[pwn31] &&
+docker rmi h4wk1ns/pwn:[glibc23]/[glibc27]/[glibc31] 
   ```
 
  #### 重新构建
@@ -415,7 +415,7 @@ log.info('-----------------------------------------------------------')
 
 def exp():
 	if 'd' in sys.argv:
-		r = gdb.debug([execve_file] + argv, gdbscript)	# 首先加载当前目录下的动态库文件
+		r = gdb.debug([execve_file] + argv, gdbscript, env={'LD_LIBRARY_PATH':'./'})	# 首先加载当前目录下的动态库文件
 	else:
 		r = remote(sys.argv[1], sys.argv[2])
 
