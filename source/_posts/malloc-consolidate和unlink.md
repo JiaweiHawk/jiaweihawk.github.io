@@ -437,7 +437,7 @@ bk->fd = fd;
 
   其会将`fd + SIZE_SZ * 3`地址处的值设置为**bk**;会将`bk + SIZE_SZ * 2`地址处的值设置为**fd**。
   但需要注意的是，**unlink**还会有安全检查:一方面，其会检查传入的**p**是否为合法的chunk;另一方面，其会检查**fd**和**bk**字段是否为有效的，因为如果调用**unlink**，则表明**p**应该是位于双向链表中，则必定有**p->fd->bk == p && p->bk->fd == p**(即双向链表中前驱的后继节点和后继的前驱节点都仍然是该节点)。因此，**fd**字段和**bk**字段实际上不能任取。
-  为了绕过这些检查，我们需要一个稍微苛刻一点的条件——我们需要一个指向正常内存(**chunk**)的指针**ptr**;**ptr**所指向的内存**chunk**已经被释放，其**fd**字段的值设置为**&ptr - SIZE_SZ * 3**，即`*(chunk + SIZE_SZ * 2) = &ptr - SIZE_SZ * 3`,其**bk**字段的值设置为**&ptr - SIZE_SZ * 2**，即`*(chunk + SIZE_SZ * 3) = &ptr - SIZE_SZ * 2`。其内存对象如下所示
+  为了绕过这些检查，我们需要一个稍微苛刻一点的条件——我们需要一个指向正常内存(**chunk**)的指针**ptr**;**ptr**所指向的内存**chunk**已经被释放，其**fd**字段的值设置为**ptr - SIZE_SZ * 3**，即`*(chunk + SIZE_SZ * 2) = ptr - SIZE_SZ * 3`,其**bk**字段的值设置为**ptr - SIZE_SZ * 2**，即`*(chunk + SIZE_SZ * 3) = ptr - SIZE_SZ * 2`。其内存对象如下所示
   ![unlink攻击下chunk内存对象](unlink攻击下chunk内存对象.PNG)
 
   此时，当释放**nextchunk**时，**unlink**以为的chunk的双向链表如下所示
@@ -460,11 +460,11 @@ int main(void) {
 	setbuf(stdout, NULL);
 
 	long long *ptr1 = (long long*)malloc(0x38);
-	long long *ptr2 = (long long*)malloc(0x80);
+	long long *ptr2 = (long long*)malloc(0x500);
 
 	printf("%p=>%p\n", &ptr1, ptr1);
 
-	ptr2[-1] = 0x90;
+	ptr2[-1] = 0x510;
 	read(0, ptr1, 0x38);
 	free(ptr2);
 
@@ -473,13 +473,20 @@ int main(void) {
 }
 ```
 
-利用
+  其利用漏洞很明显，其在读取数据之前的内存布局如下所示
+  ![unlink攻击的漏洞利用内存布局1](unlink攻击的漏洞利用内存布局1.PNG)
+
+  我们此时有ptr1指针的地址，并且通过`ptr2[-1] = 0x510`语句，其相当于ptr2指向的内存对象的物理相邻的chunk已经被释放了。
+  那么此时恰好有满足unlink攻击的条件——如果我们在ptr1指向的位置伪造一个chunk，其fd和bk字段分别为**ptr1 - SIZE_SZ * 3**和**ptr1 - SIZE_SZ * 2**，其恰好覆盖掉ptr2对象的pre_size字段。则`free(ptr2)`时，就会发生**unlink攻击**，其内存如下所示
+  ![unlink攻击的漏洞利用内存布局2](unlink攻击的漏洞利用内存布局2.PNG)
+
+
+  可以看到，当我们释放掉**ptr2**时，确实会发生**unlink攻击**，其利用和验证脚本如下所示
 ```python
 from pwn import *
 
-context.log_level = 'debug'
-#sh = process('./unlink-poc')
-sh = gdb.debug('./unlink-poc')
+context.terminal = ['tmux', 'splitw', '-h']
+sh = process('./unlink-poc')
 
 ptr1_addr = int(sh.recvuntil('=>')[2:-2], 16)
 ptr1_val = int(sh.recvuntil('\n')[2:-1], 16)
@@ -491,3 +498,6 @@ ptr1_addr = int(sh.recvuntil('=>')[2:-2], 16)
 ptr1_val = int(sh.recvuntil('\n')[2:-1], 16)
 log.info('ptr1_addr => %#x, ptr1_val => %#x'%(ptr1_addr, ptr1_val))
 ```
+
+  总结一下，一般我们会用指针存储申请的内存地址。因此该指针地址往往就是**unlink攻击**中的**ptr**。但是在**unlink攻击**中，**ptr**指向chunk，而我们指针存储的是chunk加上chunk头大小的偏移，因此我们需要在该指针上伪造一个chunk。
+  一般我们首先释放掉**ptr**指向的内存对象，然后利用**UAF**或其他手段，在该指针上伪造一个chunk。此时若释放掉其物理相邻的下一个chunk(非**fast bin**或**tcache**)，既可以发生**unlink攻击**
