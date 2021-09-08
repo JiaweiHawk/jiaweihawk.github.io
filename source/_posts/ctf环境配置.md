@@ -349,7 +349,6 @@ import platform
 context.log_level = 'debug'
 context.arch = 'amd64'				# 32位使用i386
 context.os = 'linux'
-context.terminal = ['tmux', 'splitw', '-h']
 
 execve_file = None
 lib_file = None
@@ -398,6 +397,7 @@ if execve_file != None:
 
 '''
 	lib.sym[`symbol`] 获取lib中符号地址
+	lib.search['string'].next() 获取lib中字符串地址
 '''
 if lib_file != None:
 	lib = ELF(lib_file)
@@ -414,7 +414,7 @@ log.info('-----------------------------------------------------------')
 
 def exp():
 	if 'd' in sys.argv:
-		r = gdb.debug([execve_file] + argv, gdbscript, env = {'LD_LIBRARY_PATH' : './'})	# 首先加载当前目录下的动态库文件
+		r = gdb.debug([execve_file] + argv, gdbscript)	# 首先加载当前目录下的动态库文件
 	else:
 		r = remote(sys.argv[1], sys.argv[2])
 
