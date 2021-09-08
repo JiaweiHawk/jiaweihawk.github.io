@@ -127,7 +127,8 @@ RUN python2 -m pip install pathlib2 pwntools
 
 # 配置pwndbg
 RUN git clone https://hub.fastgit.org/pwndbg/pwndbg /usr/bin/pwndbg \
-	&& (cd /usr/bin/pwndbg && ./setup.sh)
+	&& (cd /usr/bin/pwndbg && ./setup.sh) \
+	&& sed -i "s/env_args.append('{}=\"{}\"'.format(key, env.pop(key)))/env_args.append('{}={}'.format(key, env.pop(key)))/g" /usr/local/lib/python2.7/dist-packages/pwnlib/gdb.py
 
 
 
