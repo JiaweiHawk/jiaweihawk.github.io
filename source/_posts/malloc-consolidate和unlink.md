@@ -501,3 +501,141 @@ log.info('ptr1_addr => %#x, ptr1_val => %#x'%(ptr1_addr, ptr1_val))
 
   总结一下，一般我们会用指针存储申请的内存地址。因此该指针地址往往就是**unlink攻击**中的**ptr**。但是在**unlink攻击**中，**ptr**指向chunk，而我们指针存储的是chunk加上chunk头大小的偏移，因此我们需要在该指针上伪造一个chunk。
   一般我们首先释放掉**ptr**指向的内存对象，然后利用**UAF**或其他手段，在该指针上伪造一个chunk。此时若释放掉其物理相邻的下一个chunk(非**fast bin**或**tcache**)，既可以发生**unlink攻击**
+
+
+# 实例 class
+
+  点击[附件链接](class.tar.gz)
+
+## 保护分析
+
+  首先查看一下程序相关的保护机制
+  ![保护机制](保护机制.PNG)
+
+  可以看到，其并没有开启**PIE**保护，则代码段和数据段的地址都是固定的，这其实就为**unlink攻击**做铺垫——可以获取指向申请的内存对象的指针的地址，即前面介绍的**unlink攻击**中的**ptr**
+
+## 漏洞分析
+
+  首先介绍一下程序的逻辑结构。
+  整个程序可以大致分为申请课程、修改课程描述、释放课程、申请书、输出书信息、释放书、修改个人介绍和释放个人介绍几个部分。
+  对于申请课程、申请书等，其皆为简单的内存块申请，如下所示
+  ```c
+/*
+	申请课程
+*/
+int take()
+{
+  if ( does_have_class )
+    return puts("You have a current class, please dismiss it and try again");
+  class = malloc(0x38uLL);
+  does_have_class = 1;
+  puts("Please input the class description");
+  return read(0, class, 0x37uLL);
+}
+
+
+/*
+	申请书
+*/
+int buy()
+{
+  if ( does_have_book )
+    return puts("Please finish reading your current books first");
+  book = malloc(0x100uLL);
+  does_have_book = 1;
+  puts("what books do you want?");
+  return read(0, book, 0xFFuLL);
+}
+```
+
+
+  释放课程、释放书和释放个人介绍都是free申请的内存，但是稍有不同的是释放课程存在**UAF**，会导致**double free**。这里说一下，个人介绍实际上是一个大小为**0x10010**的内存对象，其在最开始申请的。
+  ```c
+/*
+	释放课程
+*/
+void dismiss()
+{
+  free(class);
+  does_have_class = 0;
+}
+
+
+/*
+	释放书
+*/
+void drop()
+{
+  if ( does_have_book )
+    free(book);
+  does_have_book = 0;
+}
+
+
+/*
+	释放个人介绍
+*/
+     case 8:
+LABEL_12:
+        if ( v3 == 1 )
+          goto LABEL_14;
+        free(profile);
+        v3 = 1;
+        menu(1u);
+        goto LABEL_3;
+```
+
+
+  其次是修改课程描述和修改个人介绍，其就是修改内存对象上数据，如下所示
+  ```c
+/*
+	修改课程描述
+*/
+int jump()
+{
+  if ( !does_have_class )
+    return puts("You can just take a class");
+  puts("Input your class description");
+  return read(0, class, 0x37uLL);
+}
+
+
+/*
+	修改个人介绍
+*/
+      case 7:
+        if ( v3 == 1 )
+          goto LABEL_12;
+        puts("Input your profile:");
+        read(0, profile, 0xFFFFuLL);
+        continue;
+```
+
+  最后，则是输出书信息，即打印内存对象上的数据，这个一般是用来泄漏libc的基址的，如下所示
+  ```c
+/*
+	输出书信息
+*/
+int view()
+{
+  if ( does_have_book != 1 )
+    return puts("You need to buy some books first");
+  puts("These is your books:");
+  return write(1, book, 0xFFuLL);
+}
+```
+
+  实际上，当程序中有一个异常大的内存对象时，此时可能就需要**malloc_consolidate**做一些事情;当程序关闭了**PIE**保护机制后，则可能会有**unlink攻击**
+
+
+## 漏洞利用
+
+  对于一般的程序，要想获取shell，则通常需要泄漏glibc的基址。在这个程序里，相关的输出函数只有输出书信息，但是其无法打印释放后的书——则通过**unsorted bin**获取基地址的想法破灭了。由于所有申请内存对象都严格限制了个数和大小，则通过**_IO_2_1_stdout**泄漏的想法也破灭了
+  但是程序的释放课程处有一个**UAF**，则结合**malloc_consolidate**，很容易产生一个**double free**——即我们有了一个可以任意更改其数据的释放的内存对象;此时在结合未开启**PIE**保护，即又有了一个可以指向该内存对象的指针的地址，则完美符合**unlink攻击**的条件。
+  有了**unlink攻击**后，我们控制了课程指针周边的内存，其仍然是很多内存的指针，从而我们可以控制这些指针的指向，完成任意地址的任意次读写，那么获取shell就非常简单了，只需要更改**__free_hook**为**system**，将前面的某一个指针指向libc中的'/bin/sh\x00'字符串，然后释放即可
+
+  当然，这里面还是有较多细节需要注意的——**unlink攻击**需要修改数据，根据上面的思路，只能通过申请课程并修改课程描述实现;但是如果申请课程的话，是否会改变当前chunk的释放情况，即是否会改变`prev_inuse (next)`，从而导致我们在利用**unlink攻击**的时候，实际上并没有和prev chunk合并，从而导致并没有调用**unlink**呢?
+  实际上这里的答案当然是不可能的，~~否则还要这篇博客干什么呢?~~。这里有一个非常巧的点——申请课程时所申请的内存对象大小属于**fast bin**中，其在释放的时候为了避免合并，不会修改其next chunk的pre_inuse字段;则自然如果申请到的是同一个chunk，也不会更改其next chunk的pre_inuse字段。也就是从**malloc_consolidate**将其pre_inuse置为0后，其申请或释放该内存对象都不会在更改next chunk的pre_inuse字段。
+
+
+## 实现
