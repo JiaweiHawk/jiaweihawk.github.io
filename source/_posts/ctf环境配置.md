@@ -350,6 +350,7 @@ import platform
 context.log_level = 'debug'
 context.arch = 'amd64'				# 32位使用i386
 context.os = 'linux'
+context.terminal = ['tmux', 'splitw', '-h']
 
 execve_file = None
 lib_file = None
@@ -382,7 +383,7 @@ xor	ecx, ecx	/*ecx -> NULL*/
 xor	edx, edx	/*edx -> NULL*/
 push	11
 pop	eax		/*eax = 11*/
-int 0x80		/*execve("/bin/sh")*/
+nt 0x80		/*execve("/bin/sh")*/
 '''%(u32('/bin'), u32('/sh\x00')))
 
 
