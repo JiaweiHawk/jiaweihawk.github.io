@@ -267,7 +267,6 @@ import platform
 context.log_level = 'debug'
 context.arch = 'amd64'				# 32位使用i386
 context.os = 'linux'
-context.terminal = ['tmux', 'splitw', '-h']
 
 execve_file = None
 lib_file = None
