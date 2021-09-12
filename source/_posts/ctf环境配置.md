@@ -133,7 +133,7 @@ sudo passwd root \
         && sudo apt-get clean \
         && sudo apt-get update \
         && sudo apt-get upgrade -y \
-        && sudo apt-get install -y python python3 \
+        && sudo apt-get install -y python python3 python3-distutils \
         gdb patchelf strace ltrace ruby \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
