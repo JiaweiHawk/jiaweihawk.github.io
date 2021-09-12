@@ -33,7 +33,7 @@ sudo passwd root \
         gdb patchelf strace ltrace \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
-        open-vm-tools-desktop fuse \
+        open-vm-tools-desktop fuse xsel \
         && wget https://hub.fastgit.org/neovim/neovim/releases/download/stable/nvim-linux64.tar.gz \
         && sudo tar -zxf nvim-linux64.tar.gz -C /usr/bin \
         && rm -rf nvim-linux64.tar.gz
@@ -89,7 +89,7 @@ sudo passwd root \
         gdb patchelf strace ltrace ruby \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
-        open-vm-tools-desktop fuse neovim
+        open-vm-tools-desktop fuse neovim xsel
 
 
 # neovim
@@ -137,7 +137,7 @@ sudo passwd root \
         gdb patchelf strace ltrace ruby \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
-        open-vm-tools-desktop fuse neovim
+        open-vm-tools-desktop fuse neovim xsel
 
 
 # neovim
