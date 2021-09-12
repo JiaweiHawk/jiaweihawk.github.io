@@ -14,141 +14,60 @@ categories: ['信息安全']
 
 ## PWN环境
 
-  由于一般PWN题目涉及到各种**Glibc**版本，因此为了搭建环境方便起见，使用**Docker**来配置PWN题目所需要的各种镜像
+  由于一般PWN题目涉及到各种**Glibc**版本，这里搭建多个虚拟机，下面给出主要版本下的虚拟机安装
 
-### 安装docker
+### ubuntu14.04
 
-  在终端中执行如下命令，安装**docker**并启动**docker服务**，
+  其安装脚本如下所示
   ```bash
-sudo pacman -S docker
-sudo systemctl start docker
-sudo systemctl enable docker
-  ```
+#!/bin/sh
 
 
-### 更换docker镜像源
-
-  由于docker拉取镜像时，默认从**docker hub**上拉取，速度较慢，因此更换为国内的镜像仓库，创建**/etc/docker/daemon.json**文件，
-  ```json
-{
- "registry-mirrors" : [
-   "https://mirror.ccs.tencentyun.com",
-   "http://registry.docker-cn.com",
-   "http://docker.mirrors.ustc.edu.cn",
-   "http://hub-mirror.c.163.com"
- ],
- "insecure-registries" : [
-   "registry.docker-cn.com",
-   "docker.mirrors.ustc.edu.cn"
- ],
- "debug" : true,
- "experimental" : true
-}
-  ```
-
-  然后重启**docker**服务更新设置，即执行如下命令
-  ```bash
-sudo systemctl restart docker
-  ```
-
-### 设置用户组
-
-  由于**docker**进程基本都以**root**账户的身份进行运行，因此将当前用户添加入**docker**用户组，避免之后每次执行命令都需要添加**sudo**
-  ```bash
-sudo usermod -aG docker ${USER}
-  ```
-
-### 获取docker镜像
+# necessary setting and software
+sudo passwd root \
+        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse" > /etc/apt/sources.list' \
+        && sudo apt-get clean \
+        && sudo apt-get update \
+        && sudo apt-get upgrade -y \
+        && sudo apt-get install -y python python3 \
+        gdb patchelf strace ltrace \
+        gcc gcc-multilib g++-multilib nasm \
+        git wget curl \
+        open-vm-tools-desktop fuse \
+        && wget https://hub.fastgit.org/neovim/neovim/releases/download/stable/nvim-linux64.tar.gz \
+        && sudo tar -zxf nvim-linux64.tar.gz -C /usr/bin \
+        && rm -rf nvim-linux64.tar.gz
 
 
- #### 直接拉取
+# neovim                                                                                                                                                                                      
+sudo ln -sf /usr/bin/nvim-linux64/bin/nvim /usr/bin/vi \                                                                                                                                                    
+        && mkdir ~/.config/nvim \                                                                                                                                                                           
+        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'                                                                                
+                                                                                                                                                                                                            
+                                                                                                                                                                                                            
+# python2-pip                                                                                                                                                                                               
+wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip.py \                                                                         
+        && python2 get-pip.py \                                                                                                                                                                             
+        && rm -rf get-pip.py \                                                                                                                                                                              
+        && python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \                                                                                                    
+        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple                                                                                                              
+                                                                                                                                                                                                            
+                                                                                                                                                                                                            
+# python3-pip                                                                                                                                                                                               
+wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip3.py \                                                                        
+        && python3 get-pip3.py \                                                                                                                                                                            
+        && rm -rf get-pip3.py \                                                                                                                                                                             
+        && python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \                                                                                                    
+        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple                                                                                                              
+                                                                                                                                            
+                                                                                                                                                                                                            
+# pwntools                                                                                                                                                                                                  
+python2 -m pip install pathlib2 pwntools                                                                                                                                                                    
+                                                                                                                                                                                                            
 
-  这里已经提前建好了相关的镜像，执行如下命令进行拉取
-  ```bash
-docker pull h4wk1ns/pwn:[glibc23]/[glibc27]/[glibc31] &&
-docker tag h4wk1ns/pwn:[glibc23]/[glibc27]/[glibc31] [pwn23]/[pwn27]/[pwn31] &&
-docker rmi h4wk1ns/pwn:[glibc23]/[glibc27]/[glibc31] 
-  ```
-
- #### 重新构建
-
-  这里采用主流的**Ubuntu**镜像，作为PWN环境的宿主系统，使用**Dockerfile**快速构建相关的镜像，可以点击查看[Dockerfile说明](https://docs.docker.com/engine/reference/builder/)
-
-  基本的两个样例镜像如下所示
-```dockerfile
-# Example for dockerfile
-FROM ubuntu:16.04
-
-
-
-# 下载需要安装的依赖和软件
-RUN sed -i 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
-	&& sed -i 's/security.ubuntu.com/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
-	&& apt-get clean \
-	&& apt-get update \
-	&& DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y python python-dev python3 python3-dev \
-	gdb patchelf strace ltrace \
-	gcc gcc-multilib g++-multilib nasm \
-	git wget curl tmux \
-	&& wget https://hub.fastgit.org/neovim/neovim/releases/download/stable/nvim-linux64.tar.gz \
-	&& tar -zxf nvim-linux64.tar.gz -C /usr/bin \
-	&& rm -rf nvim-linux64.tar.gz
-
-
-
-
-# 设置neovim
-RUN ln -sf /usr/bin/nvim-linux64/bin/nvim /usr/bin/vi
-
-
-# 设置python2
-RUN wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py \
-	&& python2 get-pip.py \
-	&& rm -rf get-pip.py \
-	&& python2 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U \
-	&& python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-
-
-
-# 设置python3
-RUN wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py \
-	&& python3 get-pip.py \
-	&& rm -rf get-pip.py \
-	&& python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U \
-	&& python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-
-
-
-
-# 安装pwntools
-RUN python2 -m pip install pathlib2 pwntools
-
-
-
-# 配置pwndbg
-RUN git clone https://hub.fastgit.org/pwndbg/pwndbg /usr/bin/pwndbg \
-	&& (cd /usr/bin/pwndbg && ./setup.sh) \
-	&& sed -i "s/env_args.append('{}=\"{}\"'.format(key, env.pop(key)))/env_args.append('{}={}'.format(key, env.pop(key)))/g" /usr/local/lib/python2.7/dist-packages/pwnlib/gdb.py
-
-
-
-# 配置tmux，方便进行分屏调试
-RUN echo 'set-option -g mouse on' > /etc/tmux.conf
-
-
-
-# 创建相关目录，之后会将主机上指定目录进行挂载，并设置为工作目录
-RUN mkdir ctf
-
-
-
-# 进入容器的bash目录位于/ctf中
-WORKDIR /ctf
-
-
-
-# 由于pwntools执行debug，必须先提前开启tmux，因此直接设置初始执行程序为tmux即可
-CMD ["tmux"]
+# pwndbg                                                                                                                                                                                                    
+git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \                                                                                                                                                  
+        && (cd ~/pwndbg && ./setup.sh)    
 ```
 
 ```dockerfile

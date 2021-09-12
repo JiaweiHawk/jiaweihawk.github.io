@@ -170,8 +170,7 @@ sudo umount /mnt/usb
 
   在konsole中输入如下bash命令
 ```bash
-sudo pacman-mirrors -i -c China -m rank
-sudo pacman -Syy
+sudo pacman-mirrors -i -c China -m rank && sudo pacman -Syy
 ```
   然后从弹出的框中选择一个最好的源即可
 
@@ -179,8 +178,7 @@ sudo pacman -Syy
 
   manjaro除了pacman以外，yay同样是重要的一个软件安装途径，如下进行安装和设置
 ```bash
-sudo pacman -S yay
-yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
+sudo pacman -S yay && yay --aururl "https://aur.tuna.tsinghua.edu.cn" --save
 ```
   yay镜像有连接次数限制，因此有时需要恢复成原始资源网站，即
 ```bash
@@ -191,11 +189,7 @@ yay --aururl "https://aur.archlinux.org" --save
 
   使用neovim作为系统的文本编辑器，在终端输入如下命令
   ```bash
-sudo pacman -S neovim xsel
-sudo ln -sf /usr/bin/nvim /usr/bin/vi
-mkdir ~/.config/nvim
-echo "set clipboard+=unnamedplus
-let g:python_recommended_style = 0" > ~/.config/nvim/init.vim
+sudo pacman -S neovim xsel && sudo ln -sf /usr/bin/nvim /usr/bin/vi && mkdir ~/.config/nvim && /bin/bash -c 'echo "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
   ```
 
 
@@ -388,24 +382,17 @@ sudo pacman -S python2-pip
 
 在konsole中执行如下bash命令
 ```bash
-python2 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
-python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+python2 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
-python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U
-python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
   有时python的pip会出现相关的错误信息，则执行如下命令重新安装pip
 ```bash
-wget --no-check-certificate https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
-python2 get-pip.py 
-rm -rf get-pip.py
-python2 -m pip install pathlib2
+wget --no-check-certificate https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py && python2 get-pip.py && rm -rf get-pip.py && python2 -m pip install pathlib2
 
 
-wget --no-check-certificate https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py
-python3 get-pip.py 
-rm -rf get-pip.py
+wget --no-check-certificate https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip3.py && python3 get-pip3.py && rm -rf get-pip3.py
 ```
   然后再执行上述的命令即可
 
@@ -434,9 +421,7 @@ sudo pacman -S git
 
 在konsole中执行如下bash命令，其中相关的参数填写git的系统设置即可
 ```bash
-git config --global user.name "hawk"
-git config --global user.email 18801353760@163.com
-git config --global core.editor vi
+git config --global user.name "hawk" && git config --global user.email 18801353760@163.com && git config --global core.editor vi
 ```
 
 ### 导出公、私钥
@@ -445,15 +430,9 @@ git config --global core.editor vi
 
 这里将公、私钥进行压缩，并进行加密处理，在konsole中执行如下bash命令
 ```bash
-git_name=hawk
-git_email=18801353760@163.com
 git_passwd=
 
-tar -zcvf ssh.tar.gz -C ~ --exclude .ssh/known_hosts .ssh/
-
-K=$(echo ${git_passwd}${git_name}${git_email} | md5sum | awk '{print $1}')
-iv=$(echo ${git_passwd}${git_name} | md5sum | awk '{print $1}')
-openssl enc -aes-256-cbc -e -in ssh.tar.gz -out ssh.dec -K ${K} -iv ${iv}
+git_name=hawk && git_email=18801353760@163.com && tar -zcvf ssh.tar.gz -C ~ --exclude .ssh/known_hosts .ssh/ && K=$(echo ${git_passwd}${git_name}${git_email} | md5sum | awk '{print $1}') && iv=$(echo ${git_passwd}${git_name} | md5sum | awk '{print $1}') && openssl enc -aes-256-cbc -e -in ssh.tar.gz -out ssh.dec -K ${K} -iv ${iv}
 ```
 
 ### 导入公、私钥
@@ -461,17 +440,10 @@ openssl enc -aes-256-cbc -e -in ssh.tar.gz -out ssh.dec -K ${K} -iv ${iv}
 即导入上述导出的公、私钥，这里给出我自己的加密后的[公、私钥](ssh.dec)
 然后对文件首先进行解密处理，最后解压缩即可，在konsole中执行如下bash命令
 ```bash
-git_name=hawk
-git_email=18801353760@163.com
 git_passwd=
 
 
-K=$(echo ${git_passwd}${git_name}${git_email} | md5sum | awk '{print $1}')
-iv=$(echo ${git_passwd}${git_name} | md5sum | awk '{print $1}')
-openssl enc -aes-256-cbc -d -in ssh.dec -out ssh.tar.gz -K ${K} -iv ${iv}
-
-tar -zxvf ssh.tar.gz -C ~/
-chmod 700 -R ~/.ssh
+git_name=hawk && git_email=18801353760@163.com && K=$(echo ${git_passwd}${git_name}${git_email} | md5sum | awk '{print $1}') && iv=$(echo ${git_passwd}${git_name} | md5sum | awk '{print $1}') && openssl enc -aes-256-cbc -d -in ssh.dec -out ssh.tar.gz -K ${K} -iv ${iv} && tar -zxvf ssh.tar.gz -C ~/ && chmod 700 -R ~/.ssh
 ```
 
 
