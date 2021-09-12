@@ -86,7 +86,7 @@ sudo passwd root \
         && sudo apt-get update \
         && sudo apt-get upgrade -y \
         && sudo apt-get install -y python python-pip python3 python3-pip \
-        gdb patchelf strace ltrace \
+        gdb patchelf strace ltrace ruby \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
         open-vm-tools-desktop fuse neovim
@@ -133,8 +133,8 @@ sudo passwd root \
         && sudo apt-get clean \
         && sudo apt-get update \
         && sudo apt-get upgrade -y \
-        && sudo apt-get install -y python python-pip python3 python3-pip \
-        gdb patchelf strace ltrace \
+        && sudo apt-get install -y python python3 python3-pip \
+        gdb patchelf strace ltrace ruby \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
         open-vm-tools-desktop fuse neovim
@@ -147,7 +147,10 @@ sudo ln -sf /usr/bin/nvim /usr/bin/vi \
 
 
 # python2-pip
-python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip.py \
+        && python2 get-pip.py \
+        && rm -rf get-pip.py \
+        && python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
         && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 
@@ -160,7 +163,8 @@ python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.ed
 sudo gem install one_gadget
 
 # pwntools
-python2 -m pip install pathlib2 pwntools
+python2 -m pip install pathlib2 pwntools \
+        && sudo ln -sf ~/.local/bin/checksec /usr/bin/checksec
 
 
 # pwndbg
