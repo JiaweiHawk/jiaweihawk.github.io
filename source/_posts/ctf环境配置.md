@@ -129,11 +129,11 @@ git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
 
 # necessary setting and software
 sudo passwd root \
-        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse" > /etc/apt/sources.list' \
+        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-security main restricted universe multiverse" > /etc/apt/sources.list' \
         && sudo apt-get clean \
         && sudo apt-get update \
         && sudo apt-get upgrade -y \
-        && sudo apt-get install -y python python3 python3-pip \
+        && sudo apt-get install -y python python3 \
         gdb patchelf strace ltrace ruby \
         gcc gcc-multilib g++-multilib nasm \
         git wget curl \
@@ -156,7 +156,10 @@ wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{pr
 
 
 # python3-pip
-python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+wget https://bootstrap.pypa.io/pip/get-pip.py -O get-pip3.py \
+        && python3 get-pip3.py \
+        && rm -rf get-pip3.py \
+        && python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
         && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # ruby
@@ -170,75 +173,6 @@ python2 -m pip install pathlib2 pwntools \
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
         && (cd ~/pwndbg && ./setup.sh)
-```
-```dockerfile
-# Example for dockerfile
-FROM ubuntu:20.04
-
-
-
-# 下载需要安装的依赖和软件
-RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
-	&& sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
-	&& apt-get clean \
-	&& apt-get update \
-	&& DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y python python-dev python3 python3-distutils \
-	gdb patchelf strace ltrace\
-	gcc gcc-multilib g++-multilib nasm \
-	git neovim wget curl tmux
-
-
-
-
-# 设置neovim
-RUN ln -sf /usr/bin/nvim /usr/bin/vi
-
-
-# 设置python2
-RUN wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py \
-	&& python2 get-pip.py \
-	&& rm -rf get-pip.py \
-	&& python2 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U \
-	&& python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-
-
-# 设置python3
-RUN wget https://bootstrap.pypa.io/pip/get-pip.py \
-	&& python3 get-pip.py \
-	&& rm -rf get-pip.py \
-	&& python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pip -U \
-	&& python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-
-
-
-# 安装pwntools
-RUN python2 -m pip install pathlib2 pwntools
-
-
-
-# 配置pwndbg
-RUN git clone https://hub.fastgit.org/pwndbg/pwndbg /usr/bin/pwndbg \
-	&& (cd /usr/bin/pwndbg && ./setup.sh)
-
-
-
-# 配置tmux，方便进行分屏调试
-RUN echo 'set-option -g mouse on' > /etc/tmux.conf
-
-
-
-# 创建相关目录，之后会将主机上指定目录进行挂载，并设置为工作目录
-RUN mkdir ctf
-
-
-
-# 进入容器的bash目录位于/ctf中
-WORKDIR /ctf
-
-
-
-# 由于pwntools执行debug，必须先提前开启tmux，因此直接设置初始执行程序为tmux即可
-CMD ["tmux"]
 ```
 
 
