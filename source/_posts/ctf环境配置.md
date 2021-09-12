@@ -16,7 +16,7 @@ categories: ['信息安全']
 
   由于一般PWN题目涉及到各种**Glibc**版本，这里搭建多个虚拟机，下面给出主要版本下的虚拟机安装
 
-### ubuntu14.04
+### ubuntu16.04
 
   其安装脚本如下所示
   ```bash
@@ -39,37 +39,134 @@ sudo passwd root \
         && rm -rf nvim-linux64.tar.gz
 
 
-# neovim                                                                                                                                                                                      
-sudo ln -sf /usr/bin/nvim-linux64/bin/nvim /usr/bin/vi \                                                                                                                                                    
-        && mkdir ~/.config/nvim \                                                                                                                                                                           
-        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'                                                                                
-                                                                                                                                                                                                            
-                                                                                                                                                                                                            
-# python2-pip                                                                                                                                                                                               
-wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip.py \                                                                         
-        && python2 get-pip.py \                                                                                                                                                                             
-        && rm -rf get-pip.py \                                                                                                                                                                              
-        && python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \                                                                                                    
-        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple                                                                                                              
-                                                                                                                                                                                                            
-                                                                                                                                                                                                            
-# python3-pip                                                                                                                                                                                               
-wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip3.py \                                                                        
-        && python3 get-pip3.py \                                                                                                                                                                            
-        && rm -rf get-pip3.py \                                                                                                                                                                             
-        && python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \                                                                                                    
-        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple                                                                                                              
-                                                                                                                                            
-                                                                                                                                                                                                            
-# pwntools                                                                                                                                                                                                  
-python2 -m pip install pathlib2 pwntools                                                                                                                                                                    
-                                                                                                                                                                                                            
+# neovim
+sudo ln -sf /usr/bin/nvim-linux64/bin/nvim /usr/bin/vi \
+        && mkdir ~/.config/nvim \
+        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
 
-# pwndbg                                                                                                                                                                                                    
-git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \                                                                                                                                                  
-        && (cd ~/pwndbg && ./setup.sh)    
+
+# python2-pip
+wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip.py \
+        && python2 get-pip.py \
+        && rm -rf get-pip.py \
+        && python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+
+# python3-pip
+wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip3.py \
+        && python3 get-pip3.py \
+        && rm -rf get-pip3.py \
+        && python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+
+# pwntools
+python2 -m pip install pathlib2 pwntools
+
+
+# pwndbg
+git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
+        && (cd ~/pwndbg && ./setup.sh)
 ```
 
+
+### ubuntu 18.04
+
+  ```bash
+#!/bin/sh
+
+
+# necessary setting and software
+sudo passwd root \
+        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse" > /etc/apt/sources.list' \
+        && sudo apt-get clean \
+        && sudo apt-get update \
+        && sudo apt-get upgrade -y \
+        && sudo apt-get install -y python python-pip python3 python3-pip \
+        gdb patchelf strace ltrace \
+        gcc gcc-multilib g++-multilib nasm \
+        git wget curl \
+        open-vm-tools-desktop fuse neovim
+
+
+# neovim
+sudo ln -sf /usr/bin/nvim /usr/bin/vi \
+        && mkdir ~/.config/nvim \
+        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
+
+
+# python2-pip
+python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+
+# python3-pip
+python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+# ruby
+sudo gem install one_gadget
+
+# pwntools
+python2 -m pip install pathlib2 pwntools
+
+
+# pwndbg
+git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
+        && (cd ~/pwndbg && ./setup.sh)
+```
+
+
+### ubuntu 20.04
+
+   ```bash
+#!/bin/sh
+
+
+# necessary setting and software
+sudo passwd root \
+        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse" > /etc/apt/sources.list' \
+        && sudo apt-get clean \
+        && sudo apt-get update \
+        && sudo apt-get upgrade -y \
+        && sudo apt-get install -y python python-pip python3 python3-pip \
+        gdb patchelf strace ltrace \
+        gcc gcc-multilib g++-multilib nasm \
+        git wget curl \
+        open-vm-tools-desktop fuse neovim
+
+
+# neovim
+sudo ln -sf /usr/bin/nvim /usr/bin/vi \
+        && mkdir ~/.config/nvim \
+        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
+
+
+# python2-pip
+python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+
+
+# python3-pip
+python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+# ruby
+sudo gem install one_gadget
+
+# pwntools
+python2 -m pip install pathlib2 pwntools
+
+
+# pwndbg
+git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
+        && (cd ~/pwndbg && ./setup.sh)
+```
 ```dockerfile
 # Example for dockerfile
 FROM ubuntu:20.04
@@ -140,43 +237,6 @@ WORKDIR /ctf
 CMD ["tmux"]
 ```
 
-
-  接着，在终端执行如下命令，构建**docker**镜像
-  ```bash
-docker build -t ctf .
-  ```
-
-
- 为了以后方便拉取，我们将其推送到**docker hub**中的个人账户即可，
-  在终端中登录**docker hub**的账户，如下
-  ```bash
-docker logout
-docker login
-  ```
-
-  最后，使用`tag`命令，将镜像名称进行规范化，并最终完成**docker hub**的推送，其命令如下
-  ```bash
-docker tag [local-repo] h4wk1ns/[glibc31] 
-docker push h4wk1ns/pwn:[glibc31] 
-  ```
-
-  实际上在生成镜像的过程中，产生了非常多的中间镜像，可以将所有的镜像进行全部删除，之后在拉取，执行如下命令即可
-  ```bash
-docker rmi $(docker images -a -q)
-  ```
-
-### 运行容器
-  当我们需要在当前目录下进入该环境时，执行如下命令
-  ```bash
-docker run -it -v $(pwd):/ctf pwn
-  ```
-
-
-### 删除容器
-  当我们使用完环境，要删除该容器时，执行如下命令
-  ```bash
-docker rm $(docker ps -a | grep "ctf" | awk '{print $1}')
-  ```
 
 ## patchelf
 
