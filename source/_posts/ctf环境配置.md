@@ -270,7 +270,6 @@ context.os = 'linux'
 
 execve_file = None
 lib_file = None
-gdbscript = '''starti;'''
 argv = []
 
 
@@ -332,7 +331,7 @@ log.info('-----------------------------------------------------------')
 
 def exp():
 	if 'd' in sys.argv:
-		r = gdb.debug([execve_file] + argv, gdbscript, env={'LD_LIBRARY_PATH':'./'})	# 首先加载当前目录下的动态库文件
+		r = gdb.debug([execve_file] + argv, env={'LD_LIBRARY_PATH':'./'})	# 首先加载当前目录下的动态库文件
 	else:
 		r = remote(sys.argv[1], sys.argv[2])
 
