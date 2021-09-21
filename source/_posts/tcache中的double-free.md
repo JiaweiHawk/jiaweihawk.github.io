@@ -79,7 +79,7 @@ tcache_put (mchunkptr chunk, size_t tc_idx)
   ![tcache填充满](tcache填充满.PNG)
 2. 将**victim**内存块释放掉。由于**tcache**已经满了，则其会被释放到对应大小的**fast bin**链上，如下图所示
   ![释放victim](释放victim.PNG)
-3. 申请一个与**victim**相同大小的chunk。根据**malloc**的分配流程，其会首先从**tcache**中进行申请，然后再去查找**fast bin**。因此这里会分配前面的**chunk7**，如下图所示
+3. 申请一个与**victim**相同大小的chunk。根据**malloc**的分配流程，其会首先从**tcache**中进行申请，然后再去查找**fast bin**。因此这里会分配前面的**chunk1**，如下图所示
   ![重新申请内存](重新申请内存.PNG)
 4. 重新释放**victim**内存块。由于之前**tcache**中没有释放过**victim**，则可以正常释放；但是**fast bin**中已经有**victim**内存块，则完成了**double free**，如下图所示
   ![再次释放victim](再次释放victim.PNG)
