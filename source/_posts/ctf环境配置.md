@@ -70,6 +70,13 @@ python2 -m pip install pathlib2 pwntools
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
         && (cd ~/pwndbg && ./setup.sh)
+
+
+# one_gadget
+sudo add-apt-repository -y ppa:brightbox/ruby-ng \
+	&& sudo apt-get update \
+	&& sudo apt-get install -y ruby2.6 ruby2.6-dev \
+	&& sudo gem install one_gadget
 ```
 
 
