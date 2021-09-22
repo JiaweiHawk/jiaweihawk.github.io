@@ -64,12 +64,14 @@ wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{pr
 
 
 # pwntools
-python2 -m pip install pathlib2 pwntools
+python2 -m pip install pathlib2 pwntools \
+        && bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
 
 
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
-        && (cd ~/pwndbg && ./setup.sh)
+        && (cd ~/pwndbg && ./setup.sh) \
+	&& sed -i "s/env_args.append('{}=\"{}\"'.format(key, env.pop(key)))/env_args.append('{}={}'.format(key, env.pop(key)))/g" ~/.local/lib/python2.7/site-packages/pwnlib/gdb.py
 
 
 # one_gadget
@@ -119,8 +121,8 @@ python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.ed
 sudo gem install one_gadget
 
 # pwntools
-python2 -m pip install pathlib2 pwntools
-
+python2 -m pip install pathlib2 pwntools \
+	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
 
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
@@ -174,7 +176,8 @@ sudo gem install one_gadget
 
 # pwntools
 python2 -m pip install pathlib2 pwntools \
-        && sudo ln -sf ~/.local/bin/checksec /usr/bin/checksec
+        && sudo ln -sf ~/.local/bin/checksec /usr/bin/checksec \
+	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
 
 
 # pwndbg
