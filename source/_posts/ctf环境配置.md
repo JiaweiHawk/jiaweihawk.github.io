@@ -340,17 +340,23 @@ log.info('-----------------------------------------------------------')
 
 
 def exp():
+	global r
 	if 'd' in sys.argv:
 		r = gdb.debug([execve_file] + argv, env={'LD_LIBRARY_PATH':'./'})	# 首先加载当前目录下的动态库文件
 	else:
 		r = remote(sys.argv[1], sys.argv[2])
 
-	r.interactive()
-
 while True:
 	try:
 		exp()
-		break
+		r.sendline('cat flag')
+		data = r.recvuntil('}', timeout = 0.5)
+		if '{' not in data:
+			r.close()
+			continue
+		else:
+			r.interactive()
+			break
 	except KeyboardInterrupt:
 		break
 	except:
