@@ -21,64 +21,67 @@ categories: ['信息安全']
   其安装脚本如下所示
   ```bash
 #!/bin/sh
-
+set -x
 
 # necessary setting and software
 sudo passwd root \
-        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse" > /etc/apt/sources.list' \
-        && sudo apt-get clean \
-        && sudo apt-get update \
-        && sudo apt-get upgrade -y \
-        && sudo apt-get install -y python python3 \
-        gdb patchelf strace ltrace \
-        gcc gcc-multilib g++-multilib nasm \
-        git wget curl \
-        open-vm-tools-desktop fuse xsel \
-        && wget https://hub.fastgit.org/neovim/neovim/releases/download/stable/nvim-linux64.tar.gz \
-        && sudo tar -zxf nvim-linux64.tar.gz -C /usr/bin \
-        && rm -rf nvim-linux64.tar.gz
+	&& su -c 'sed -i "s/cn.archive.ubuntu.com/mirrors.aliyun.com/g" /etc/apt/sources.list && sed -i "s/security.ubuntu.com/mirrors.aliyun.com/g" /etc/apt/sources.list && sed -i "s/# deb-src http:\/\/mirrors/deb-src http:\/\/mirrors/g" /etc/apt/sources.list' \
+	&& sudo apt-get clean \
+	&& sudo apt-get update \
+	&& sudo apt-get upgrade -y \
+	&& sudo apt-get install -y python python-dev python3 python3-dev libffi-dev \
+	gdb patchelf strace ltrace \
+	gcc gcc-multilib g++-multilib nasm \
+	git wget curl \
+	open-vm-tools-desktop fuse xsel \
+	&& wget https://hub.fastgit.org/neovim/neovim/releases/download/stable/nvim-linux64.tar.gz \
+	&& sudo tar -zxf nvim-linux64.tar.gz -C /usr/bin \
+	&& rm -rf nvim-linux64.tar.gz
 
 
 # neovim
 sudo ln -sf /usr/bin/nvim-linux64/bin/nvim /usr/bin/vi \
-        && mkdir ~/.config/nvim \
-        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
+	&& mkdir ~/.config/nvim \
+	&& /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
 
+# git
+git config --global user.name "hawk" && git config --global user.email 18801353760@163.com && git config --global core.editor vi
 
 # python2-pip
 wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip.py \
-        && python2 get-pip.py \
-        && rm -rf get-pip.py \
-        && python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+	&& python2 get-pip.py \
+	&& rm -rf get-pip.py \
+	&& python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+	&& python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 
 
 # python3-pip
 wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip3.py \
-        && python3 get-pip3.py \
-        && rm -rf get-pip3.py \
-        && python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+	&& python3 get-pip3.py \
+	&& rm -rf get-pip3.py \
+	&& python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+	&& python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 
 
 # pwntools
-python2 -m pip install pathlib2 pwntools \
-        && bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
+python2 -m pip install pathlib2 \
+	&& python3 -m pip install pwntools \
+	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
 
 
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
-        && (cd ~/pwndbg && ./setup.sh) \
+	&& (cd ~/pwndbg && ./setup.sh) \
 	&& sed -i "s/env_args.append('{}=\"{}\"'.format(key, env.pop(key)))/env_args.append('{}={}'.format(key, env.pop(key)))/g" ~/.local/lib/python2.7/site-packages/pwnlib/gdb.py
 
 
-# one_gadget
+# ruby
 sudo add-apt-repository -y ppa:brightbox/ruby-ng \
 	&& sudo apt-get update \
 	&& sudo apt-get install -y ruby2.6 ruby2.6-dev \
-	&& sudo gem install one_gadget
+	&& sudo gem install one_gadget seccomp-tools
 ```
 
 
@@ -86,47 +89,54 @@ sudo add-apt-repository -y ppa:brightbox/ruby-ng \
 
   ```bash
 #!/bin/sh
-
+set -x
 
 # necessary setting and software
 sudo passwd root \
-        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ xenial-security main restricted universe multiverse" > /etc/apt/sources.list' \
-        && sudo apt-get clean \
-        && sudo apt-get update \
-        && sudo apt-get upgrade -y \
-        && sudo apt-get install -y python python-pip python3 python3-pip \
-        gdb patchelf strace ltrace ruby \
-        gcc gcc-multilib g++-multilib nasm \
-        git wget curl \
-        open-vm-tools-desktop fuse neovim xsel
+	&& su -c 'sed -i "s/cn.archive.ubuntu.com/mirrors.aliyun.com/g" /etc/apt/sources.list && sed -i "s/security.ubuntu.com/mirrors.aliyun.com/g" /etc/apt/sources.list && sed -i "s/# deb-src http:\/\/mirrors/deb-src http:\/\/mirrors/g" /etc/apt/sources.list' \
+	&& sudo apt-get clean \
+	&& sudo apt-get update \
+	&& sudo apt-get upgrade -y \
+	&& sudo apt-get install -y python python-pip python-dev python3 python3-pip python3-dev libffi-dev \
+	gdb patchelf strace ltrace \
+	gcc gcc-multilib g++-multilib nasm \
+	git wget curl \
+	open-vm-tools-desktop fuse neovim xsel
 
 
 # neovim
 sudo ln -sf /usr/bin/nvim /usr/bin/vi \
-        && mkdir ~/.config/nvim \
-        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
+	&& mkdir ~/.config/nvim \
+	&& /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
 
+# git
+git config --global user.name "hawk" && git config --global user.email 18801353760@163.com && git config --global core.editor vi
 
 # python2-pip
 python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+	&& python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 
 
 # python3-pip
 python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+	&& python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # ruby
-sudo gem install one_gadget
+sudo add-apt-repository -y ppa:brightbox/ruby-ng \
+	&& sudo apt-get update \
+	&& sudo apt-get install -y ruby2.6 ruby2.6-dev \
+	&& sudo gem install one_gadget seccomp-tools
+
 
 # pwntools
-python2 -m pip install pathlib2 pwntools \
+python2 -m pip install pathlib2 \
+	&& python3 -m pip install pwntools \
 	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
 
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
-        && (cd ~/pwndbg && ./setup.sh)
+	&& (cd ~/pwndbg && ./setup.sh)
 ```
 
 
@@ -134,55 +144,58 @@ git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
 
    ```bash
 #!/bin/sh
-
+set -x
 
 # necessary setting and software
 sudo passwd root \
-        && su -c 'echo -e "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-updates main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-updates main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-backports main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-backports main restricted universe multiverse\n\ndeb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-security main restricted universe multiverse\ndeb-src https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ focal-security main restricted universe multiverse" > /etc/apt/sources.list' \
-        && sudo apt-get clean \
-        && sudo apt-get update \
-        && sudo apt-get upgrade -y \
-        && sudo apt-get install -y python python3 python3-distutils \
-        gdb patchelf strace ltrace ruby \
-        gcc gcc-multilib g++-multilib nasm \
-        git wget curl \
-        open-vm-tools-desktop fuse neovim xsel
+	&& su -c 'sed -i "s/cn.archive.ubuntu.com/mirrors.aliyun.com/g" /etc/apt/sources.list && sed -i "s/security.ubuntu.com/mirrors.aliyun.com/g" /etc/apt/sources.list && sed -i "s/# deb-src http:\/\/mirrors/deb-src http:\/\/mirrors/g" /etc/apt/sources.list' \
+	&& sudo apt-get clean \
+	&& sudo apt-get update \
+	&& sudo apt-get upgrade -y \
+	&& sudo apt-get install -y python python-dev python3 python3-dev python3-distutils libffi-dev \
+	gdb patchelf strace ltrace ruby ruby-dev \
+	gcc gcc-multilib g++-multilib nasm \
+	git wget curl \
+	open-vm-tools-desktop fuse neovim xsel
 
 
 # neovim
 sudo ln -sf /usr/bin/nvim /usr/bin/vi \
-        && mkdir ~/.config/nvim \
-        && /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
+	&& mkdir ~/.config/nvim \
+	&& /bin/bash -c 'echo -e "set clipboard+=unnamedplus\nlet g:python_recommended_style = 0" > ~/.config/nvim/init.vim'
 
+# git
+git config --global user.name "hawk" && git config --global user.email 18801353760@163.com && git config --global core.editor vi
 
 # python2-pip
 wget https://bootstrap.pypa.io/pip/$(python2 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/get-pip.py -O get-pip.py \
-        && python2 get-pip.py \
-        && rm -rf get-pip.py \
-        && python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-        && python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+	&& python2 get-pip.py \
+	&& rm -rf get-pip.py \
+	&& python2 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+	&& python2 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 
 
 # python3-pip
 wget https://bootstrap.pypa.io/pip/get-pip.py -O get-pip3.py \
-        && python3 get-pip3.py \
-        && rm -rf get-pip3.py \
-        && python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
-        && python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+	&& python3 get-pip3.py \
+	&& rm -rf get-pip3.py \
+	&& python3 -m pip install -U --force-reinstall pip -i https://pypi.tuna.tsinghua.edu.cn/simple \
+	&& python3 -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # ruby
-sudo gem install one_gadget
+sudo gem install one_gadget seccomp-tools
 
 # pwntools
-python2 -m pip install pathlib2 pwntools \
-        && sudo ln -sf ~/.local/bin/checksec /usr/bin/checksec \
+python2 -m pip install pathlib2 \
+	&& python3 -m pip install pwntools \
+	&& sudo ln -sf ~/.local/bin/checksec /usr/bin/checksec \
 	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
 
 
 # pwndbg
 git clone https://hub.fastgit.org/pwndbg/pwndbg ~/pwndbg \
-        && (cd ~/pwndbg && ./setup.sh)
+	&& (cd ~/pwndbg && ./setup.sh)
 ```
 
 
@@ -265,7 +278,7 @@ gdb [file] -ex [command1] -ex [command2] ...
 
   为了方便*PWN*，这里专门给出一个标准脚本，可以稍加修改即可用于任何不同的*PWN*题目
   ```python
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding:utf-8 -*-
 from pwn import *
 import sys
@@ -280,7 +293,6 @@ context.os = 'linux'
 
 execve_file = None
 lib_file = None
-argv = []
 
 
 
@@ -352,9 +364,16 @@ log.info('-----------------------------------------------------------')
 def exp():
 	global r
 	if 'd' in sys.argv:
-		r = gdb.debug([execve_file] + argv, env={'LD_LIBRARY_PATH':'./'})	# 首先加载当前目录下的动态库文件
+		#r = process(execve_file, env = {'LD_LIBRARY_PATH':'./'})	# 首先加载当前目录下的动态库文件
+		r = process(execve_file)
+		gdb.attach(r)	# 断点必须在第一个输入之后
 	else:
 		r = remote(sys.argv[1], sys.argv[2])
+
+	'''
+	u32/u64(number, sign = "signed"/"unsigned", endian = "little"/"big")
+	p32/p64(number, sign = "signed"/"unsigned", endian = "little"/"big")
+	'''
 
 while True:
 	try:
@@ -371,8 +390,6 @@ while True:
 		break
 	except:
 		continue
-
-	
 log.info('-----------------------------------------------------------')
   ```
 
