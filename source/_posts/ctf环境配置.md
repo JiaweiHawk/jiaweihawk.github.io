@@ -68,7 +68,8 @@ wget https://bootstrap.pypa.io/pip/$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{pr
 # pwntools
 python2 -m pip install pathlib2 \
 	&& python3 -m pip install pwntools \
-	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf'
+	&& bash -c 'echo -e "[update]\ninterval=never"> ~/.pwn.conf' \
+	&& sudo mv /usr/local/lib/python$(python3 -V 2>&1 | sed 's/\./ /g' | awk '{printf("%s.%s", $2, $3)}')/dist-packages/bin/ROPgadget /usr/bin
 
 
 # pwndbg
@@ -365,7 +366,7 @@ if execve_file != None:
 
 '''
 	lib.sym[`symbol`] 获取lib中符号地址
-	lib.search['string'].next() 获取lib中字符串地址
+	next(lib.search('string')) 获取lib中字符串地址
 '''
 if lib_file != None:
 	lib = ELF(lib_file)
