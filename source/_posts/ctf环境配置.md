@@ -3,6 +3,7 @@ title: ctf环境配置
 date: 2021-07-21 21:21:25
 tags: ['信息安全','设置']
 categories: ['信息安全']
+sticky: 100
 ---
 
 # 前言
