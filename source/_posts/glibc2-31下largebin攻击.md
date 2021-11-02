@@ -31,7 +31,7 @@ categories: ['ctf']
 		      < (unsigned long) chunksize_nomask (bck->bk))
                     {
                       fwd = bck;
-                      bck = bck->bk;
+
 
                       victim->fd_nextsize = fwd->fd;
                       victim->bk_nextsize = fwd->fd->bk_nextsize;
@@ -47,21 +47,6 @@ categories: ['ctf']
 # 利用思路
 
   当然，**largebin attack**的作用仅仅是向一个任意地址写一个**largebin**地址。因此其一定需要配合其他方法，从而一起完成一次攻击，目前主要的有**house of banana**和**house of pig**
-
-
-
-## house of pig
-
-### 攻击姿势
-
-  **house of pig**涉及到了**FILE结构利用**和**largebin attack**
-
-#### FILE结构利用
-
-  
-### 样例:ty_peak
-
-
 
 ## house of banana
 
