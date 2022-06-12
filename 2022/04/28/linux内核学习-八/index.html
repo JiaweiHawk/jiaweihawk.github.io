@@ -1,0 +1,801 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><title>linux内核学习-八 | H4wk1ns's blog</title><meta name="keywords" content="linux,内核"><meta name="author" content="H4wk1ns"><meta name="copyright" content="H4wk1ns"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="前言本篇博客将研究Linux内核的信号机制信号机制一开始用于用户态进程间的通信，现在也被内核用于通知进程所发生的事件 信号简介信号(signal)是很短的消息，可以被发送到一个进程或一个进程组。其发送的信息通常是一个数，以此标识信号。 信号的作用使用信号的两个主要目的是  让进程知道已经发生了一个特定的事件 强迫进程执行自己代码中的信号处理程序  信号基于80x86架构的Linux内核所处理的信号">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux内核学习-八">
+<meta property="og:url" content="https://jiaweihawk.gitee.io/2022/04/28/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%85%AB/index.html">
+<meta property="og:site_name" content="H4wk1ns&#39;s blog">
+<meta property="og:description" content="前言本篇博客将研究Linux内核的信号机制信号机制一开始用于用户态进程间的通信，现在也被内核用于通知进程所发生的事件 信号简介信号(signal)是很短的消息，可以被发送到一个进程或一个进程组。其发送的信息通常是一个数，以此标识信号。 信号的作用使用信号的两个主要目的是  让进程知道已经发生了一个特定的事件 强迫进程执行自己代码中的信号处理程序  信号基于80x86架构的Linux内核所处理的信号">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://jiaweihawk.gitee.io/img/background.jpg">
+<meta property="article:published_time" content="2022-04-28T05:25:07.000Z">
+<meta property="article:modified_time" content="2022-06-05T11:17:57.186Z">
+<meta property="article:author" content="H4wk1ns">
+<meta property="article:tag" content="linux">
+<meta property="article:tag" content="内核">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://jiaweihawk.gitee.io/img/background.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.gitee.io/2022/04/28/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%85%AB/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容：${query}"}},
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    jQuery: 'https://cdn.jsdelivr.net/npm/jquery@latest/dist/jquery.min.js',
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/js/jquery.justifiedGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/css/justifiedGallery.min.css'
+    },
+    fancybox: {
+      js: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.css'
+    }
+  },
+  isPhotoFigcaption: true,
+  islazyload: false,
+  isanchor: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'linux内核学习-八',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2022-06-05 19:17:57'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+    const fontSizeVal = saveToLocal.get('global-font-size')
+    if (fontSizeVal !== undefined) {
+      document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
+    }
+    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">linux内核学习-八</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-04-28T05:25:07.000Z" title="发表于 2022-04-28 13:25:07">2022-04-28</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-06-05T11:17:57.186Z" title="更新于 2022-06-05 19:17:57">2022-06-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">5.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>21分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="linux内核学习-八"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>本篇博客将研究Linux内核的信号机制<br>信号机制一开始用于用户态进程间的通信，现在也被内核用于通知进程所发生的事件</p>
+<h1 id="信号简介"><a href="#信号简介" class="headerlink" title="信号简介"></a>信号简介</h1><p>信号(signal)是很短的消息，可以被发送到一个进程或一个进程组。其发送的信息通常是一个数，以此标识信号。</p>
+<h2 id="信号的作用"><a href="#信号的作用" class="headerlink" title="信号的作用"></a>信号的作用</h2><p>使用信号的两个主要目的是</p>
+<ol>
+<li>让进程知道已经发生了一个特定的事件</li>
+<li>强迫进程执行自己代码中的信号处理程序</li>
+</ol>
+<h2 id="信号"><a href="#信号" class="headerlink" title="信号"></a>信号</h2><p>基于80x86架构的Linux内核所处理的信号定义与<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/include/uapi/asm/signal.h#L23">arch/x86/include/uapi/asm/signal.h</a></p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">编号</th>
+<th style="text-align:center">信号名称</th>
+<th style="text-align:center">缺省操作</th>
+<th style="text-align:center">解释</th>
+<th style="text-align:center">POSIX</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">1</td>
+<td style="text-align:center">SIGHUP</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">挂起控制终端或进程</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">2</td>
+<td style="text-align:center">SIGINT</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">来自键盘的中断</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">3</td>
+<td style="text-align:center">SIGQUIT</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">从键盘退出</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">4</td>
+<td style="text-align:center">SIGILL</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">非法指令</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">5</td>
+<td style="text-align:center">SIGTRAP</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">追踪的断点</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">6</td>
+<td style="text-align:center">SIGABRT</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">异常结束</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">6</td>
+<td style="text-align:center">SIGIOT</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">等价于SIGABRT</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">7</td>
+<td style="text-align:center">SIGBUS</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">总线错误</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">8</td>
+<td style="text-align:center">SIGFPE</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">浮点异常</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">9</td>
+<td style="text-align:center">SIGKILL</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">强迫进程终止</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">10</td>
+<td style="text-align:center">SIGUSR1</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">对进程可用</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">11</td>
+<td style="text-align:center">SIGSEGV</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">无效的内存引用</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">12</td>
+<td style="text-align:center">SIGUSR2</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">对进程可用</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">13</td>
+<td style="text-align:center">SIGPIPE</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">向无读者的管道写</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">14</td>
+<td style="text-align:center">SIGALRM</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">实时定时器时钟</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">15</td>
+<td style="text-align:center">SIGTERM</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">进程终止</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">16</td>
+<td style="text-align:center">SIGSTKFLT</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">协处理器栈错误</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">17</td>
+<td style="text-align:center">SIGCHLD</td>
+<td style="text-align:center">Ignore</td>
+<td style="text-align:center">子进程停止、结束或在被跟踪时，获得信号</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">18</td>
+<td style="text-align:center">SIGCONT</td>
+<td style="text-align:center">Continue</td>
+<td style="text-align:center">如果已停止，则恢复执行</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">19</td>
+<td style="text-align:center">SIGSTOP</td>
+<td style="text-align:center">Stop</td>
+<td style="text-align:center">停止进程执行</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">20</td>
+<td style="text-align:center">SIGTSTP</td>
+<td style="text-align:center">Stop</td>
+<td style="text-align:center">从tty发出停止进程</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">21</td>
+<td style="text-align:center">SIGTTIN</td>
+<td style="text-align:center">Stop</td>
+<td style="text-align:center">后台进程请求输入</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">22</td>
+<td style="text-align:center">SIGTTOU</td>
+<td style="text-align:center">Stop</td>
+<td style="text-align:center">后台进程请求输出</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">23</td>
+<td style="text-align:center">SIGURG</td>
+<td style="text-align:center">Ignore</td>
+<td style="text-align:center">套接字上的紧急条件</td>
+<td style="text-align:center">是</td>
+</tr>
+<tr>
+<td style="text-align:center">24</td>
+<td style="text-align:center">SIGXCPU</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">超过CPU时限</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">25</td>
+<td style="text-align:center">SIGXFSZ</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">超过文件大小的限制</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">26</td>
+<td style="text-align:center">SIGVTALRM</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">虚拟定时器时钟</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">27</td>
+<td style="text-align:center">SIGPROF</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">概况定时器时钟</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">28</td>
+<td style="text-align:center">SIGWINCH</td>
+<td style="text-align:center">Ignore</td>
+<td style="text-align:center">窗口调整大小</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">29</td>
+<td style="text-align:center">SIGIO</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">I/O现在可能发生</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">30</td>
+<td style="text-align:center">SIGPWR</td>
+<td style="text-align:center">Terminate</td>
+<td style="text-align:center">电源供给失效</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">31</td>
+<td style="text-align:center">SIGSYS</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">坏的系统调用</td>
+<td style="text-align:center">否</td>
+</tr>
+<tr>
+<td style="text-align:center">31</td>
+<td style="text-align:center">SIGUNUSED</td>
+<td style="text-align:center">Dump</td>
+<td style="text-align:center">等价于SIGSYS</td>
+<td style="text-align:center">否</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="信号处理"><a href="#信号处理" class="headerlink" title="信号处理"></a>信号处理</h2><p>信号的一个重要特点就是可以随时被发送给状态进程不可预知的进程。如果信号发送给非运行进程，则该信号需要由内核保存，直到该进程恢复执行为止。</p>
+<p>因此，内核将信号处理的流程划分为两个不同阶段</p>
+<ol>
+<li>信号产生<br>内核更新目标进程的数据结构，标识该信号已被发送</li>
+<li>信号传递<br>内核强迫目标进程通过以下方式，对信号做出反应：或改变目标进程的执行状态，或开始执行一个特定的信号处理程序，或两者都是</li>
+</ol>
+<p>每个所产生的信号至多被传递一次，并且一旦被传递出去，目标进程描述符中有关该信号的所有信息都被取消。</p>
+<p>对于已经产生，但并没有被传递的信号，被称为<strong>挂起信号</strong>(pending signal)。任何时候，一个进程仅存在给定类型的一个挂起信号，同一进程同种类型的其他信号不会排队，只是简单地被丢弃。</p>
+<p>一般来说，信号处理会有如下性质</p>
+<ol>
+<li>信号通常只被当前正运行的进程传递(即由current进程传递)</li>
+<li>给定类型的信号，可以由进程选择性地阻塞。在这种情况下，在取消阻塞前，该进程将不接受这个信号</li>
+<li>当进程执行一个信号处理函数时，通常<strong>屏蔽</strong>相应的信号，直到处理程序结束。因此，信号处理程序不必是可重入的</li>
+</ol>
+<p>而上述描述的信号处理特征，要求内核必须</p>
+<ol>
+<li>记住每个进程阻塞了那些信号</li>
+<li>当从内核态切换到用户态时，对任何一个进程都要检查是否有信号到达</li>
+<li>处理信号，即信号可能在进程运行期间的任意时刻，请求把进程切换到一个信号处理函数，并在该函数返回以后恢复原来执行的上下文</li>
+</ol>
+<h2 id="信号传递"><a href="#信号传递" class="headerlink" title="信号传递"></a>信号传递</h2><p>如果进程对一个信号阻塞，则其不会被传递；只有在进程解除相应信号的阻塞后，进程才会传递对应的信号</p>
+<p>进程以下列三种方式之一，对信号做出传递</p>
+<ol>
+<li>显示地忽略信号。</li>
+<li>执行与信号相关的缺省操作<ul>
+<li>Terminate<br>进程被终止(杀死)</li>
+<li>Dump<br>进程被终止(杀死)，并且，如果可能，创建包含进程执行上下文的核心转储文件</li>
+<li>Ignore<br>信号被忽略</li>
+<li>Stop<br>进程被停止，即把进程置为<strong>TASK_STOPPED</strong>状态</li>
+<li>Continue<br>如果进程被停止，则将其状态设置为<strong>TASK_RUNNING</strong>状态</li>
+</ul>
+</li>
+<li>调用相应的信号处理函数，捕获信号</li>
+</ol>
+<p>需要注意的是，<strong>SIGKILL</strong>和<strong>SIGSTOP</strong>信号不可以被显示地忽略、捕获或阻塞，也就是其通常必须执行相应的缺省操作。</p>
+<h2 id="与信号相关的数据结构"><a href="#与信号相关的数据结构" class="headerlink" title="与信号相关的数据结构"></a>与信号相关的数据结构</h2><p>Linux内核需要追踪当前什么信号正在挂起或被屏蔽，以及每个线程组是如何处理所有信号的。Linux内核中使用多个数据结构进行管理，其关系如下图所示<br><img src="信号数据结构关系.png" alt="信号相关的数据结构关系"></p>
+<h3 id="struct-task-struct"><a href="#struct-task-struct" class="headerlink" title="struct task_struct"></a>struct task_struct</h3><p>Linux内核位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/sched.h#L728">include/linux/sched.h</a>的进程描述符中，包含诸多当前进程的相关信号信息。该结构体的重要的相关字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct signal_struct *</td>
+<td style="text-align:center">signal</td>
+<td style="text-align:center">指向进程的信号描述符的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct sighand_struct __rcu *</td>
+<td style="text-align:center">sighand</td>
+<td style="text-align:center">指向进程的信号处理程序描述符的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">sigset_t</td>
+<td style="text-align:center">blocked</td>
+<td style="text-align:center">被阻塞信号的掩码</td>
+</tr>
+<tr>
+<td style="text-align:center">sigset_t</td>
+<td style="text-align:center">real_blocked</td>
+<td style="text-align:center">被阻塞信号的临时掩码</td>
+</tr>
+<tr>
+<td style="text-align:center">struct sigpending</td>
+<td style="text-align:center">pending</td>
+<td style="text-align:center">存放私有挂起信号的数据结构</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">sas_ss_sp</td>
+<td style="text-align:center">信号处理程序备用堆栈的地址</td>
+</tr>
+<tr>
+<td style="text-align:center">size_t</td>
+<td style="text-align:center">sas_ss_size</td>
+<td style="text-align:center">信号处理程序备用堆栈的大小</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="struct-signal-struct"><a href="#struct-signal-struct" class="headerlink" title="struct signal_struct"></a>struct signal_struct</h3><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/sched/signal.h#L93">include/linux/sched/signal.h</a>的信号描述符，用来描述进程组共享的挂起信号和一些进程组的与信号处理关系不那么密切的资源。总而言之，信号描述符被属于同一线程组的所有进程共享，对属于同一线程组的每个进程而言，信号描述符中的字段必须都是相同的。该结构体的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">refcount_t</td>
+<td style="text-align:center">sigcnt</td>
+<td style="text-align:center">信号描述符的使用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">live</td>
+<td style="text-align:center">线程组中活动进程的数量</td>
+</tr>
+<tr>
+<td style="text-align:center">wait_queue_head_t</td>
+<td style="text-align:center">wait_chldexit</td>
+<td style="text-align:center">在系统调用<strong>wait4()</strong>中睡眠的进程的等待队列</td>
+</tr>
+<tr>
+<td style="text-align:center">struct task_struct *</td>
+<td style="text-align:center">curr_target</td>
+<td style="text-align:center">接受信号的线程组中最后一个进程的进程描述符</td>
+</tr>
+<tr>
+<td style="text-align:center">struct sigpending</td>
+<td style="text-align:center">shared_pending</td>
+<td style="text-align:center">存放共享挂起的信号的数据结构</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">group_exit_code</td>
+<td style="text-align:center">线程组的进程终止代码</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">notify_count</td>
+<td style="text-align:center">在杀死整个线程组时使用</td>
+</tr>
+<tr>
+<td style="text-align:center">struct task_struct *</td>
+<td style="text-align:center">group_exec_task</td>
+<td style="text-align:center">在杀死整个线程组时使用</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">group_stop_count</td>
+<td style="text-align:center">在停止整个线程组的时候使用</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="struct-sighand-struct"><a href="#struct-sighand-struct" class="headerlink" title="struct sighand_struct"></a>struct sighand_struct</h3><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/sched/signal.h#L20">include/linux/sched/signal.h</a>的信号处理程序描述符，从而描述线程组的每个信号必须怎样被处理。该结构体的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">refcount_t</td>
+<td style="text-align:center">count</td>
+<td style="text-align:center">信号处理程序描述符的使用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">struct k_sigaction[64]</td>
+<td style="text-align:center">action</td>
+<td style="text-align:center">线程组在传递信号时，所执行操作的结构数组</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="struct-k-sigaction"><a href="#struct-k-sigaction" class="headerlink" title="struct k_sigaction"></a>struct k_sigaction</h3><p>由于信号处理的相关特性与体系结构有关，因此Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/signal_types.h#L51">include/linux/signal_types.h</a>的<strong>struct k_sigaction</strong>，从而即包含对用户态进程所隐藏的特性，亦包含用户态进程熟悉的<strong>struct sigaction</strong>结构。<br>在80x86体系下，信号处理的所有特性都对用户态进程可见，因此<strong>struct k_sigaction</strong>包装，实际使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/include/uapi/asm/signal.h#L94">arch/x86/include/uapi/asm/signal.h</a>的<strong>struct sigaction</strong>。该结构体的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">__sighandler_t</td>
+<td style="text-align:center">sa_handler</td>
+<td style="text-align:center">指定要执行操作的类型<br>可以是函数指针，也可以是SIG_DFL(缺省操作)或SIG_IGN(忽略信号)</td>
+</tr>
+<tr>
+<td style="text-align:center">sigset_t</td>
+<td style="text-align:center">sa_mask</td>
+<td style="text-align:center">指定当前信号处理程序运行时，要屏蔽掉的信号</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">sa_flags</td>
+<td style="text-align:center">指定必须如何处理该信号</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="struct-sigpending"><a href="#struct-sigpending" class="headerlink" title="struct sigpending"></a>struct sigpending</h3><p>内核需要跟踪当前的线程组的挂起信号，线程组的挂起信号存储在如下两个队列中</p>
+<ol>
+<li>共享挂起信号队列。即信号描述符的<strong>shared_pending</strong>字段，存放整个线程组的挂起信号</li>
+<li>私有挂起信号队列。即进程描述符的<strong>pending</strong>字段，存放特定进程的挂起信号</li>
+</ol>
+<p>而内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/signal_types.h#L32">include/linux/signal_types.h</a>的<strong>struct sigpending</strong>结构体来描述挂起信号队列。该结构体的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">sigset_t</td>
+<td style="text-align:center">signal</td>
+<td style="text-align:center">该挂起队列的信号位掩码</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">list</td>
+<td style="text-align:center">包含<strong>struct sigqueue</strong>的双向链表</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>而Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/signal_types.h#L22">include/linux/signal_types.h</a>的<strong>struct sigqueue</strong>，作为挂起信号队列的元素类型。其重要的字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">list</td>
+<td style="text-align:center">挂起队列双向链表的相关字段</td>
+</tr>
+<tr>
+<td style="text-align:center">kernel_siginfo_t</td>
+<td style="text-align:center">info</td>
+<td style="text-align:center">描述产生信号的事件<br>包括信号编号、发送信号者的标识等信息</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h1 id="产生信号"><a href="#产生信号" class="headerlink" title="产生信号"></a>产生信号</h1><p>很多内核函数都可以产生信号，即根据需要，更新一个或多个进程的相关描述符。之后并不直接执行<strong>信号传递</strong>操作，而是可能根据信号的类型和相关目标进程的状态，唤醒一些进程，并促使这些进程接受信号</p>
+<p>一般的，内核或另一个进程可以通过如下内核函数，为指定进程产生信号</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">函数名称</th>
+<th style="text-align:center">函数位置</th>
+<th style="text-align:center">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">send_sig</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1645">kernel/signal.c</a></td>
+<td style="text-align:center">向单一进程发送信号</td>
+</tr>
+<tr>
+<td style="text-align:center">send_sig_info</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1628">kernel/signal.c</a></td>
+<td style="text-align:center">与<strong>send_sig</strong>类似，但还使用<strong>siginfo_t</strong>结构中的拓展信息</td>
+</tr>
+<tr>
+<td style="text-align:center">force_sig</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1651">kernel/signal.c</a></td>
+<td style="text-align:center">发送既不能被进程显式忽略，亦不能被进程阻塞的信号</td>
+</tr>
+<tr>
+<td style="text-align:center">force_sig_info</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1356">kernel/signal.c</a></td>
+<td style="text-align:center">与<strong>force_sig</strong>类似，只是还是用<strong>siginfo_t</strong>结构中的拓展信息</td>
+</tr>
+<tr>
+<td style="text-align:center">SYSCALL_DEFINE2(tkill)</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L3970">kernel/signal.c</a></td>
+<td style="text-align:center"><strong>tkill</strong>的系统调用服务例程<br>向指定一个进程发送信号</td>
+</tr>
+<tr>
+<td style="text-align:center">SYSCALL_DEFINE3(tgkill)</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L3954">kernel/signal.c</a></td>
+<td style="text-align:center"><strong>tgkill</strong>的系统调用服务例程<br>向指定线程发送信号</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>实际上，上述函数都是对于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1290">kernel/signal.c</a>的<strong>int do_send_sig_info(int sig, struct kernel_siginfo <em>info, struct task_struct </em>p, enum pid_type type)</strong>函数的包装，将在后面进行具体分析</p>
+<p>而内核或另一个进程，同样可以通过如下内核函数，为指定线程组产生信号</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">函数名称</th>
+<th style="text-align:center">函数位置</th>
+<th style="text-align:center">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">SYSCALL_DEFINE2(kill)</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L3773">kernel/signal.c</a></td>
+<td style="text-align:center"><strong>kill</strong>的系统调用服务例程<br>向指定进程(线程组)发送指定信号</td>
+</tr>
+<tr>
+<td style="text-align:center">SYSCALL_DEFINE3(rt_sigqueueinfo)</td>
+<td style="text-align:center"><a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L3998">kernel/signal.c</a></td>
+<td style="text-align:center"><strong>rt_sigqueueinfo</strong>的系统调用服务例程<br>向指定线程组发送信号</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>实际上，上述函数都是对于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1435">kernel/signal.c</a>的<strong>int group_send_sig_info(int sig, struct kernel_siginfo <em>info, struct task_struct </em>p, enum pid_type type)</strong>函数的包装，将在后面进行具体分析</p>
+<h2 id="do-send-sig-info"><a href="#do-send-sig-info" class="headerlink" title="do_send_sig_info"></a>do_send_sig_info</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1290">kernel/signal.c</a>的<strong>int do_send_sig_info(int sig, struct kernel_siginfo <em>info, struct task_struct </em>p, enum pid_type type)</strong>函数，向单个指定进程发送信号。其化简后的逻辑如下所示</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">do_send_sig_info</span><span class="params">(<span class="keyword">int</span> sig, struct kernel_siginfo *info, struct task_struct *p,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">enum</span> pid_type type)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> flags;</span><br><span class="line">	<span class="keyword">int</span> ret = -ESRCH;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (lock_task_sighand(p, &amp;flags)) &#123;</span><br><span class="line">		ret = send_signal(sig, info, p, type);</span><br><span class="line">		unlock_task_sighand(p, &amp;flags);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">send_signal</span><span class="params">(<span class="keyword">int</span> sig, struct kernel_siginfo *info, struct task_struct *t,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">enum</span> pid_type type)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">return</span> __send_signal(sig, info, t, type, force);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">int</span> __send_signal(<span class="keyword">int</span> sig, struct kernel_siginfo *info, struct task_struct *t,</span><br><span class="line">			<span class="keyword">enum</span> pid_type type, <span class="keyword">bool</span> force)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="keyword">if</span> (!prepare_signal(sig, t, force))</span><br><span class="line">		<span class="keyword">goto</span> ret;</span><br><span class="line"></span><br><span class="line">	pending = (type != PIDTYPE_PID) ? &amp;t-&gt;signal-&gt;shared_pending : &amp;t-&gt;pending;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Short-circuit ignored signals and support queuing</span></span><br><span class="line"><span class="comment">	 * exactly one non-rt signal, so that we can get more</span></span><br><span class="line"><span class="comment">	 * detailed information about the cause of the signal.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="keyword">if</span> (legacy_queue(pending, sig))</span><br><span class="line">		<span class="keyword">goto</span> ret;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Skip useless siginfo allocation for SIGKILL and kernel threads.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="keyword">if</span> ((sig == SIGKILL) || (t-&gt;flags &amp; PF_KTHREAD))</span><br><span class="line">		<span class="keyword">goto</span> out_set;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Real-time signals must be queued if sent by sigqueue, or</span></span><br><span class="line"><span class="comment">	 * some other real-time mechanism.  It is implementation</span></span><br><span class="line"><span class="comment">	 * defined whether kill() does so.  We attempt to do so, on</span></span><br><span class="line"><span class="comment">	 * the principle of least surprise, but since kill is not</span></span><br><span class="line"><span class="comment">	 * allowed to fail with EAGAIN when low on memory we just</span></span><br><span class="line"><span class="comment">	 * make sure at least one signal gets delivered and don&#x27;t</span></span><br><span class="line"><span class="comment">	 * pass on the info struct.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	<span class="keyword">if</span> (sig &lt; SIGRTMIN)</span><br><span class="line">		override_rlimit = (is_si_special(info) || info-&gt;si_code &gt;= <span class="number">0</span>);</span><br><span class="line">	<span class="keyword">else</span></span><br><span class="line">		override_rlimit = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">	q = __sigqueue_alloc(sig, t, GFP_ATOMIC, override_rlimit, <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (q) &#123;</span><br><span class="line">		list_add_tail(&amp;q-&gt;<span class="built_in">list</span>, &amp;pending-&gt;<span class="built_in">list</span>);</span><br><span class="line">		<span class="keyword">switch</span> ((<span class="keyword">unsigned</span> <span class="keyword">long</span>) info) &#123;</span><br><span class="line">		<span class="keyword">case</span> (<span class="keyword">unsigned</span> <span class="keyword">long</span>) SEND_SIG_NOINFO:</span><br><span class="line">			clear_siginfo(&amp;q-&gt;info);</span><br><span class="line">			q-&gt;info.si_signo = sig;</span><br><span class="line">			q-&gt;info.si_errno = <span class="number">0</span>;</span><br><span class="line">			q-&gt;info.si_code = SI_USER;</span><br><span class="line">			q-&gt;info.si_pid = task_tgid_nr_ns(current,</span><br><span class="line">							task_active_pid_ns(t));</span><br><span class="line">			rcu_read_lock();</span><br><span class="line">			q-&gt;info.si_uid =</span><br><span class="line">				from_kuid_munged(task_cred_xxx(t, user_ns),</span><br><span class="line">						 current_uid());</span><br><span class="line">			rcu_read_unlock();</span><br><span class="line">			<span class="keyword">break</span>;</span><br><span class="line">		<span class="keyword">case</span> (<span class="keyword">unsigned</span> <span class="keyword">long</span>) SEND_SIG_PRIV:</span><br><span class="line">			clear_siginfo(&amp;q-&gt;info);</span><br><span class="line">			q-&gt;info.si_signo = sig;</span><br><span class="line">			q-&gt;info.si_errno = <span class="number">0</span>;</span><br><span class="line">			q-&gt;info.si_code = SI_KERNEL;</span><br><span class="line">			q-&gt;info.si_pid = <span class="number">0</span>;</span><br><span class="line">			q-&gt;info.si_uid = <span class="number">0</span>;</span><br><span class="line">			<span class="keyword">break</span>;</span><br><span class="line">		<span class="keyword">default</span>:</span><br><span class="line">			copy_siginfo(&amp;q-&gt;info, info);</span><br><span class="line">			<span class="keyword">break</span>;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">out_set:</span><br><span class="line">	signalfd_notify(t, sig);</span><br><span class="line">	sigaddset(&amp;pending-&gt;signal, sig);</span><br><span class="line">	complete_signal(sig, t, type);</span><br><span class="line">ret:</span><br><span class="line">	trace_signal_generate(sig, info, t, type != PIDTYPE_PID, result);</span><br><span class="line">	<span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其大体思路很简单，就是向指定的进程挂起信号队列中添加对应的信号元素即可(忽略诸多细节)。</p>
+<h2 id="group-send-sig-info"><a href="#group-send-sig-info" class="headerlink" title="group_send_sig_info"></a>group_send_sig_info</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L1435">kernel/signal.c</a>的<strong>int group_send_sig_info(int sig, struct kernel_siginfo <em>info, struct task_struct </em>p, enum pid_type type)</strong>函数，向整个线程组发送信号。其化简后的逻辑如下所示</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">group_send_sig_info</span><span class="params">(<span class="keyword">int</span> sig, struct kernel_siginfo *info,</span></span></span><br><span class="line"><span class="params"><span class="function">			struct task_struct *p, <span class="keyword">enum</span> pid_type type)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	ret = check_kill_permission(sig, info, p);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (!ret &amp;&amp; sig)</span><br><span class="line">		ret = do_send_sig_info(sig, info, p, type);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到，其实际上就是前面<strong>do_send_sig_info</strong>的简单包装——原因也很简单，向指定进程发送信号和向整个线程组发送信号的大体逻辑基本一致，除了一个将信号添加至私有挂起信号队列中(进程描述符的<strong>pending</strong>字段)，另一个添加至共享挂起信号队列(信号描述符的<strong>shared_pending</strong>字段)中</p>
+<h1 id="传递信号"><a href="#传递信号" class="headerlink" title="传递信号"></a>传递信号</h1><p>当内核根据前面的介绍，为相关的进程产生信号后。但是由于对应的进程不一定运行在CPU上，因此内核会延迟信号传递的任务。<br>而一般的，为了确保进程的挂起信号可以得到内核的处理，内核会在完成中断、异常或系统调用后，并在恢复用户态之前，检查是否存在挂起的信号，并调用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/entry/common.c#L143">kernel/entry/common.c</a>的<code>static void handle_signal_work(struct pt_regs *regs, unsigned long ti_work)</code>函数<del>(这个信号传递函数，甚至名称都和以前版本完全不一样，找了好久)</del></p>
+<h2 id="获取挂起信号"><a href="#获取挂起信号" class="headerlink" title="获取挂起信号"></a>获取挂起信号</h2><p>根据前面的介绍，内核会遍历处理所有的挂起信号。Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/signal.c#L2624">kernel/signal.c</a>的<strong>bool get_signal(struct ksignal *ksig)</strong>函数，遍历所有的挂起信号。其函数调用栈如下所示<br><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">handle_signal_work(regs, ti_work)</span><br><span class="line">			|</span><br><span class="line">			+void arch_do_signal_or_restart(struct pt_regs *regs, bool has_signal)</span><br><span class="line">											|</span><br><span class="line">											+bool get_signal(struct ksignal *ksig)</span><br></pre></td></tr></table></figure></p>
+<p><del>不过居然在<strong>get_signal</strong>函数中执行信号的缺省handle，意料之外但是情理之中</del></p>
+<p>其省略部分细节的代码如下所示<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">bool</span> <span class="title">get_signal</span><span class="params">(struct ksignal *ksig)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> (;;) &#123;</span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Signals generated by the execution of an instruction</span></span><br><span class="line"><span class="comment">		 * need to be delivered before any other pending signals</span></span><br><span class="line"><span class="comment">		 * so that the instruction pointer in the signal stack</span></span><br><span class="line"><span class="comment">		 * frame points to the faulting instruction.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		type = PIDTYPE_PID;</span><br><span class="line">		signr = dequeue_synchronous_signal(&amp;ksig-&gt;info);</span><br><span class="line">		<span class="keyword">if</span> (!signr)</span><br><span class="line">			signr = dequeue_signal(current, &amp;current-&gt;blocked,</span><br><span class="line">					       &amp;ksig-&gt;info, &amp;type);</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (!signr)</span><br><span class="line">			<span class="keyword">break</span>; <span class="comment">/* will return 0 */</span></span><br><span class="line"></span><br><span class="line">		ka = &amp;sighand-&gt;action[signr<span class="number">-1</span>];</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (ka-&gt;sa.sa_handler == SIG_IGN) <span class="comment">/* Do nothing.  */</span></span><br><span class="line">			<span class="keyword">continue</span>;</span><br><span class="line">		<span class="keyword">if</span> (ka-&gt;sa.sa_handler != SIG_DFL) &#123;</span><br><span class="line">			<span class="comment">/* Run the handler.  */</span></span><br><span class="line">			ksig-&gt;ka = *ka;</span><br><span class="line">			<span class="keyword">if</span> (ka-&gt;sa.sa_flags &amp; SA_ONESHOT)</span><br><span class="line">				ka-&gt;sa.sa_handler = SIG_DFL;</span><br><span class="line"></span><br><span class="line">			<span class="keyword">break</span>; <span class="comment">/* will return non-zero &quot;signr&quot; value */</span></span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Now we are doing the default action for this signal.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		<span class="keyword">if</span> (sig_kernel_ignore(signr)) <span class="comment">/* Default is nothing. */</span></span><br><span class="line">			<span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Global init gets no signals it doesn&#x27;t want.</span></span><br><span class="line"><span class="comment">		 * Container-init gets no signals it doesn&#x27;t want from same</span></span><br><span class="line"><span class="comment">		 * container.</span></span><br><span class="line"><span class="comment">		 *</span></span><br><span class="line"><span class="comment">		 * Note that if global/container-init sees a sig_kernel_only()</span></span><br><span class="line"><span class="comment">		 * signal here, the signal must have been generated internally</span></span><br><span class="line"><span class="comment">		 * or must have come from an ancestor namespace. In either</span></span><br><span class="line"><span class="comment">		 * case, the signal cannot be dropped.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		<span class="keyword">if</span> (unlikely(signal-&gt;flags &amp; SIGNAL_UNKILLABLE) &amp;&amp;</span><br><span class="line">				!sig_kernel_only(signr))</span><br><span class="line">			<span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (sig_kernel_stop(signr)) &#123;</span><br><span class="line">			<span class="comment">/*</span></span><br><span class="line"><span class="comment">			 * The default action is to stop all threads in</span></span><br><span class="line"><span class="comment">			 * the thread group.  The job control signals</span></span><br><span class="line"><span class="comment">			 * do nothing in an orphaned pgrp, but SIGSTOP</span></span><br><span class="line"><span class="comment">			 * always works.  Note that siglock needs to be</span></span><br><span class="line"><span class="comment">			 * dropped during the call to is_orphaned_pgrp()</span></span><br><span class="line"><span class="comment">			 * because of lock ordering with tasklist_lock.</span></span><br><span class="line"><span class="comment">			 * This allows an intervening SIGCONT to be posted.</span></span><br><span class="line"><span class="comment">			 * We need to check for that and bail out if necessary.</span></span><br><span class="line"><span class="comment">			 */</span></span><br><span class="line">			<span class="keyword">if</span> (signr != SIGSTOP) &#123;</span><br><span class="line">				spin_unlock_irq(&amp;sighand-&gt;siglock);</span><br><span class="line"></span><br><span class="line">				<span class="comment">/* signals can be posted during this window */</span></span><br><span class="line"></span><br><span class="line">				<span class="keyword">if</span> (is_current_pgrp_orphaned())</span><br><span class="line">					<span class="keyword">goto</span> relock;</span><br><span class="line"></span><br><span class="line">				spin_lock_irq(&amp;sighand-&gt;siglock);</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			<span class="keyword">if</span> (likely(do_signal_stop(ksig-&gt;info.si_signo))) &#123;</span><br><span class="line">				<span class="comment">/* It released the siglock.  */</span></span><br><span class="line">				<span class="keyword">goto</span> relock;</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			<span class="comment">/*</span></span><br><span class="line"><span class="comment">			 * We didn&#x27;t actually stop, due to a race</span></span><br><span class="line"><span class="comment">			 * with SIGCONT or something like that.</span></span><br><span class="line"><span class="comment">			 */</span></span><br><span class="line">			<span class="keyword">continue</span>;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Anything else is fatal, maybe with a core dump.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		<span class="keyword">if</span> (sig_kernel_coredump(signr)) &#123;</span><br><span class="line">			<span class="keyword">if</span> (print_fatal_signals)</span><br><span class="line">				print_fatal_signal(ksig-&gt;info.si_signo);</span><br><span class="line">			proc_coredump_connector(current);</span><br><span class="line">			<span class="comment">/*</span></span><br><span class="line"><span class="comment">			 * If it was able to dump core, this kills all</span></span><br><span class="line"><span class="comment">			 * other threads in the group and synchronizes with</span></span><br><span class="line"><span class="comment">			 * their demise.  If we lost the race with another</span></span><br><span class="line"><span class="comment">			 * thread getting here, it set group_exit_code</span></span><br><span class="line"><span class="comment">			 * first and our do_group_exit call below will use</span></span><br><span class="line"><span class="comment">			 * that value and ignore the one we pass it.</span></span><br><span class="line"><span class="comment">			 */</span></span><br><span class="line">			do_coredump(&amp;ksig-&gt;info);</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Death signals, no core dump.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		do_group_exit(ksig-&gt;info.si_signo);</span><br><span class="line">		<span class="comment">/* NOTREACHED */</span></span><br><span class="line"></span><br><span class="line">	&#125;</span><br><span class="line">out:</span><br><span class="line">	ksig-&gt;sig = signr;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> ksig-&gt;sig &gt; <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是遍历挂起的信号，并根据当前进程的进程描述符的<strong>sighand</strong>字段中的<strong>action</strong>信息，从而执行缺省操作，或返回执行用户自定义的<strong>handler</strong></p>
+<h2 id="用户handler"><a href="#用户handler" class="headerlink" title="用户handler"></a>用户handler</h2><p>由于可能需要执行<strong>用户态</strong>空间定义的信号handler，因此此过程涉及到频繁的<strong>用户态</strong>空间和<strong>内核态</strong>空间的转换，如下图所示</p>
+<p><img src="调用用户handler栈变换.png" alt="调用用户handler栈变换"><br><img src="调用用户handler流程.png" alt="调用用户handler流程"></p>
+<p>内核需要从内核态返回到用户态，执行<strong>用户态</strong>空间中定义的信号handler，之后回到<strong>内核态</strong>空间，并返回<strong>中断</strong>、<strong>异常</strong>或<strong>系统调用</strong>前的用户态上下文继续执行。</p>
+<p>Linux内核的大体思路就是首先更改备份在<strong>内核态</strong>栈中的的<strong>用户态</strong>上下文<strong>pt_regs</strong>，然后覆盖该<strong>用户态</strong>上下文的执行流<strong>(诸如ip字段)</strong>为信号<strong>handler</strong>。当Linux内核从<strong>内核态</strong>返回到<strong>用户态</strong>时，其会从<strong>内核态</strong>栈恢复<strong>用户态</strong>上下文，从而执行<strong>用户态</strong>的信号handler。当执行完该handler后，其会再次陷入<strong>内核态</strong>，并恢复之前保存的原始<strong>用户态</strong>上下文，此时再次返回<strong>用户态</strong>，即返回到被<strong>中断</strong>、<strong>异常</strong>或<strong>系统调用</strong>打断前的<strong>用户态</strong>上下文</p>
+<h3 id="建立信号帧"><a href="#建立信号帧" class="headerlink" title="建立信号帧"></a>建立信号帧</h3><p>根据前面的分析，Linux内核需要建立信号帧，用来备份<strong>内核态</strong>堆栈中保存的<strong>用户态</strong>上下文和设置相关执行流，其实现位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/kernel/signal.c#L460">arch/x86/kernel/signal.c</a>。其省略部分细节的逻辑如下所示</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">int</span> __setup_rt_frame(<span class="keyword">int</span> sig, struct ksignal *ksig,</span><br><span class="line">			    <span class="keyword">sigset_t</span> *<span class="built_in">set</span>, struct pt_regs *regs)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">rt_sigframe</span> __<span class="title">user</span> *<span class="title">frame</span>;</span></span><br><span class="line"></span><br><span class="line">	frame = get_sigframe(&amp;ksig-&gt;ka, regs, <span class="keyword">sizeof</span>(struct rt_sigframe), &amp;fp);</span><br><span class="line">	uc_flags = frame_uc_flags(regs);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Create the ucontext.  */</span></span><br><span class="line">	unsafe_put_user(uc_flags, &amp;frame-&gt;uc.uc_flags, Efault);</span><br><span class="line">	unsafe_put_user(<span class="number">0</span>, &amp;frame-&gt;uc.uc_link, Efault);</span><br><span class="line">	unsafe_save_altstack(&amp;frame-&gt;uc.uc_stack, regs-&gt;sp, Efault);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Set up to return from userspace.  If provided, use a stub</span></span><br><span class="line"><span class="comment">	   already in userspace.  */</span></span><br><span class="line">	unsafe_put_user(ksig-&gt;ka.sa.sa_restorer, &amp;frame-&gt;pretcode, Efault);</span><br><span class="line">	unsafe_put_sigcontext(&amp;frame-&gt;uc.uc_mcontext, fp, regs, <span class="built_in">set</span>, Efault);</span><br><span class="line">	unsafe_put_sigmask(<span class="built_in">set</span>, frame, Efault);</span><br><span class="line">	user_access_end();</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Set up registers for signal handler */</span></span><br><span class="line">	regs-&gt;di = sig;</span><br><span class="line">	<span class="comment">/* In case the signal handler was declared without prototypes */</span></span><br><span class="line">	regs-&gt;ax = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (ksig-&gt;ka.sa.sa_flags &amp; SA_SIGINFO) &#123;</span><br><span class="line">		<span class="keyword">if</span> (copy_siginfo_to_user(&amp;frame-&gt;info, &amp;ksig-&gt;info))</span><br><span class="line">			<span class="keyword">return</span> -EFAULT;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* This also works for non SA_SIGINFO handlers because they expect the</span></span><br><span class="line"><span class="comment">	   next argument after the signal number on the stack. */</span></span><br><span class="line">	regs-&gt;si = (<span class="keyword">unsigned</span> <span class="keyword">long</span>)&amp;frame-&gt;info;</span><br><span class="line">	regs-&gt;dx = (<span class="keyword">unsigned</span> <span class="keyword">long</span>)&amp;frame-&gt;uc;</span><br><span class="line">	regs-&gt;ip = (<span class="keyword">unsigned</span> <span class="keyword">long</span>) ksig-&gt;ka.sa.sa_handler;</span><br><span class="line"></span><br><span class="line">	regs-&gt;sp = (<span class="keyword">unsigned</span> <span class="keyword">long</span>)frame;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Set up the CS and SS registers to run signal handlers in</span></span><br><span class="line"><span class="comment">	 * 64-bit mode, even if the handler happens to be interrupting</span></span><br><span class="line"><span class="comment">	 * 32-bit or 16-bit code.</span></span><br><span class="line"><span class="comment">	 *</span></span><br><span class="line"><span class="comment">	 * SS is subtle.  In 64-bit mode, we don&#x27;t need any particular</span></span><br><span class="line"><span class="comment">	 * SS descriptor, but we do need SS to be valid.  It&#x27;s possible</span></span><br><span class="line"><span class="comment">	 * that the old SS is entirely bogus -- this can happen if the</span></span><br><span class="line"><span class="comment">	 * signal we&#x27;re trying to deliver is #GP or #SS caused by a bad</span></span><br><span class="line"><span class="comment">	 * SS value.  We also have a compatibility issue here: DOSEMU</span></span><br><span class="line"><span class="comment">	 * relies on the contents of the SS register indicating the</span></span><br><span class="line"><span class="comment">	 * SS value at the time of the signal, even though that code in</span></span><br><span class="line"><span class="comment">	 * DOSEMU predates sigreturn&#x27;s ability to restore SS.  (DOSEMU</span></span><br><span class="line"><span class="comment">	 * avoids relying on sigreturn to restore SS; instead it uses</span></span><br><span class="line"><span class="comment">	 * a trampoline.)  So we do our best: if the old SS was valid,</span></span><br><span class="line"><span class="comment">	 * we keep it.  Otherwise we replace it.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	regs-&gt;cs = __USER_CS;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> __user *</span></span><br><span class="line"><span class="function"><span class="title">get_sigframe</span><span class="params">(struct k_sigaction *ka, struct pt_regs *regs, <span class="keyword">size_t</span> frame_size,</span></span></span><br><span class="line"><span class="params"><span class="function">	     <span class="keyword">void</span> __user **fpstate)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> sp = regs-&gt;sp;</span><br><span class="line">	sp = align_sigframe(sp - frame_size);</span><br><span class="line">	<span class="keyword">return</span> (<span class="keyword">void</span> __user *)sp;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其基本思路就是在<strong>内核态</strong>堆栈保存的<strong>用户态</strong>栈上，分配一个<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/um/signal.c#L481">struct rt_sigframe</a>结构。并在该结构中备份<strong>用户态</strong>上下文，并更改当前的<strong>用户态</strong>上下文为信号handler的上下文即可。</p>
+<p>其内核态堆栈变化如下所示<br><img src="信号处理堆栈变化.png" alt="信号处理堆栈变换"></p>
+<h3 id="执行过程"><a href="#执行过程" class="headerlink" title="执行过程"></a>执行过程</h3><p>实际上，当有了<strong>内核态</strong>堆栈和保存的<strong>用户态</strong>堆栈后，就可以静态的分析其执行过程了。</p>
+<p>当其退出到<strong>用户态</strong>空间时，其从<strong>内核态</strong>堆栈中恢复上下文。<br>其中关键寄存器的值分别如下所示</p>
+<ul>
+<li><strong>rip</strong>为<strong>用户态</strong>空间定义的信号handler</li>
+<li><strong>rdi</strong>为信号标识值</li>
+<li><strong>rsi</strong>为<strong>frame-&gt;info</strong>，也就是<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/uapi/asm-generic/siginfo.h#L138">struct siginfo</a>结构体</li>
+<li><strong>rdx</strong>为<strong>frame-&gt;uc</strong>，也就是<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/uapi/asm-generic/ucontext.h#L5">struct ucontext</a>结构体</li>
+<li><strong>rsp</strong>为伪造的<strong>frame</strong>，其栈顶即为handler执行完的返回地址<strong>frame-&gt;pretcode</strong></li>
+</ul>
+<p>首先考虑handler，Linux kernel定义位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/uapi/asm-generic/signal-defs.h#L83">include/uapi/asm-generic/signal-defs.h</a>，而glibc定义位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/glibc/glibc-2.35/source/bits/sigaction.h#L41">source/bits/sigaction.h</a>。可以看到，Linux内核中传递的实参类型都符合函数形参类型</p>
+<p>而当handler执行完后，其<strong>返回地址</strong>为<strong>rsp</strong>栈顶，也就是之前的<strong>frame-&gt;pretcode</strong>，即<strong>ksig-&gt;ka.sa.sa_restorer</strong>，其具体执行地址如下所示</p>
+<p><img src="pretcode指向指令.png" alt="指令内容"></p>
+<p>实际上用户在注册handler，同样需要提供<strong>sigaction</strong>的<strong>sa_restorer</strong>，一般是<strong>glibc</strong>会将其覆盖为该指令地址。</p>
+<p>实际上，也就是其首先执行用户定义的<strong>handler</strong>，然后执行<strong>rt_sigreturn</strong>系统调用</p>
+<h3 id="返回过程"><a href="#返回过程" class="headerlink" title="返回过程"></a>返回过程</h3><p>根据前面分析，其最后会调用<strong>rt_sigreturn</strong>系统调用，恢复初始的上下文，并再次退回到<strong>用户态</strong>。<br>Linux内核将<strong>rt_sigreturn</strong>函数服务例程定义在<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/kernel/signal.c#L657">arch/x86/kernel/signal.c</a></p>
+<p>其化简后的逻辑如下所示<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">SYSCALL_DEFINE0(rt_sigreturn)</span><br><span class="line">&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">pt_regs</span> *<span class="title">regs</span> =</span> current_pt_regs();</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">rt_sigframe</span> __<span class="title">user</span> *<span class="title">frame</span>;</span></span><br><span class="line">	<span class="keyword">sigset_t</span> <span class="built_in">set</span>;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> uc_flags;</span><br><span class="line"></span><br><span class="line">	frame = (struct rt_sigframe __user *)(regs-&gt;sp - <span class="keyword">sizeof</span>(<span class="keyword">long</span>));</span><br><span class="line">	<span class="keyword">if</span> (!access_ok(frame, <span class="keyword">sizeof</span>(*frame)))</span><br><span class="line">		<span class="keyword">goto</span> badframe;</span><br><span class="line">	<span class="keyword">if</span> (__get_user(*(__u64 *)&amp;<span class="built_in">set</span>, (__u64 __user *)&amp;frame-&gt;uc.uc_sigmask))</span><br><span class="line">		<span class="keyword">goto</span> badframe;</span><br><span class="line">	<span class="keyword">if</span> (__get_user(uc_flags, &amp;frame-&gt;uc.uc_flags))</span><br><span class="line">		<span class="keyword">goto</span> badframe;</span><br><span class="line"></span><br><span class="line">	set_current_blocked(&amp;<span class="built_in">set</span>);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (!restore_sigcontext(regs, &amp;frame-&gt;uc.uc_mcontext, uc_flags))</span><br><span class="line">		<span class="keyword">goto</span> badframe;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (restore_altstack(&amp;frame-&gt;uc.uc_stack))</span><br><span class="line">		<span class="keyword">goto</span> badframe;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> regs-&gt;ax;</span><br><span class="line"></span><br><span class="line">badframe:</span><br><span class="line">	signal_fault(regs, frame, <span class="string">&quot;rt_sigreturn&quot;</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>可以看到，其大体思路就是从<strong>用户态</strong>堆栈中恢复保存的<strong>内核态</strong>上下文即可</p>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><blockquote>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://juejin.cn/post/7081189234245107742">https://juejin.cn/post/7081189234245107742</a></li>
+</ol>
+</blockquote>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.gitee.io/2022/04/28/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%85%AB/">https://jiaweihawk.gitee.io/2022/04/28/linux内核学习-八/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.gitee.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2022/04/26/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%B8%83/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">linux内核学习-七</div></div></a></div><div class="next-post pull-right"><a href="/2022/04/28/%E6%B8%97%E9%80%8F%E6%B5%8B%E8%AF%95%E8%BD%AF%E4%BB%B6/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">渗透测试软件</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2022/04/26/linux内核学习-七/" title="linux内核学习-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-26</div><div class="title">linux内核学习-七</div></div></a></div><div><a href="/2022/03/07/linux内核学习-三/" title="linux内核学习-三"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-03-07</div><div class="title">linux内核学习-三</div></div></a></div><div><a href="/2022/05/11/linux内核学习-九/" title="linux内核学习-九"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-11</div><div class="title">linux内核学习-九</div></div></a></div><div><a href="/2022/02/27/linux内核学习-二/" title="linux内核学习-二"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-02-27</div><div class="title">linux内核学习-二</div></div></a></div><div><a href="/2022/04/01/linux内核学习-五/" title="linux内核学习-五"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-01</div><div class="title">linux内核学习-五</div></div></a></div><div><a href="/2022/04/19/linux内核学习-六/" title="linux内核学习-六"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-19</div><div class="title">linux内核学习-六</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%BF%A1%E5%8F%B7%E7%AE%80%E4%BB%8B"><span class="toc-number">2.</span> <span class="toc-text">信号简介</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BF%A1%E5%8F%B7%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">2.1.</span> <span class="toc-text">信号的作用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BF%A1%E5%8F%B7"><span class="toc-number">2.2.</span> <span class="toc-text">信号</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86"><span class="toc-number">2.3.</span> <span class="toc-text">信号处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BF%A1%E5%8F%B7%E4%BC%A0%E9%80%92"><span class="toc-number">2.4.</span> <span class="toc-text">信号传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8E%E4%BF%A1%E5%8F%B7%E7%9B%B8%E5%85%B3%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">2.5.</span> <span class="toc-text">与信号相关的数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#struct-task-struct"><span class="toc-number">2.5.1.</span> <span class="toc-text">struct task_struct</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#struct-signal-struct"><span class="toc-number">2.5.2.</span> <span class="toc-text">struct signal_struct</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#struct-sighand-struct"><span class="toc-number">2.5.3.</span> <span class="toc-text">struct sighand_struct</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#struct-k-sigaction"><span class="toc-number">2.5.4.</span> <span class="toc-text">struct k_sigaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#struct-sigpending"><span class="toc-number">2.5.5.</span> <span class="toc-text">struct sigpending</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%BA%A7%E7%94%9F%E4%BF%A1%E5%8F%B7"><span class="toc-number">3.</span> <span class="toc-text">产生信号</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#do-send-sig-info"><span class="toc-number">3.1.</span> <span class="toc-text">do_send_sig_info</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#group-send-sig-info"><span class="toc-number">3.2.</span> <span class="toc-text">group_send_sig_info</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%BC%A0%E9%80%92%E4%BF%A1%E5%8F%B7"><span class="toc-number">4.</span> <span class="toc-text">传递信号</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E6%8C%82%E8%B5%B7%E4%BF%A1%E5%8F%B7"><span class="toc-number">4.1.</span> <span class="toc-text">获取挂起信号</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%A8%E6%88%B7handler"><span class="toc-number">4.2.</span> <span class="toc-text">用户handler</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BB%BA%E7%AB%8B%E4%BF%A1%E5%8F%B7%E5%B8%A7"><span class="toc-number">4.2.1.</span> <span class="toc-text">建立信号帧</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E8%BF%87%E7%A8%8B"><span class="toc-number">4.2.2.</span> <span class="toc-text">执行过程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E8%BF%87%E7%A8%8B"><span class="toc-number">4.2.3.</span> <span class="toc-text">返回过程</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">5.</span> <span class="toc-text">参考</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/26/xv6-%E4%B8%89/" title="xv6-三">xv6-三</a><time datetime="2022-05-26T01:46:10.000Z" title="发表于 2022-05-26 09:46:10">2022-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/21/xv6-%E4%BA%8C/" title="xv6-二">xv6-二</a><time datetime="2022-05-21T14:24:40.000Z" title="发表于 2022-05-21 22:24:40">2022-05-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/19/xv6/" title="xv6">xv6</a><time datetime="2022-05-19T12:05:10.000Z" title="发表于 2022-05-19 20:05:10">2022-05-19</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
+  window.MathJax = {
+    loader: {
+      source: {
+        '[tex]/amsCd': '[tex]/amscd'
+      }
+    },
+    tex: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"]],
+      tags: 'ams'
+    },
+    options: {
+      renderActions: {
+        findScript: [10, doc => {
+          for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+            const display = !!node.type.match(/; *mode=display/)
+            const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+            const text = document.createTextNode('')
+            node.parentNode.replaceChild(text, node)
+            math.start = {node: text, delim: '', n: 0}
+            math.end = {node: text, delim: '', n: 0}
+            doc.math.push(math)
+          }
+        }, ''],
+        addClass: [200,() => {
+          document.querySelectorAll('mjx-container:not([display=\'true\']').forEach( node => {
+            const target = node.parentNode
+            if (!target.classList.contains('has-jax')) {
+              target.classList.add('mathjax-overflow')
+            }
+          })
+        }, '', false]
+      }
+    }
+  }
+  
+  const script = document.createElement('script')
+  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+  script.id = 'MathJax-script'
+  script.async = true
+  document.head.appendChild(script)
+} else {
+  MathJax.startup.document.state(0)
+  MathJax.texReset()
+  MathJax.typeset()
+}</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

@@ -1,0 +1,344 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><title>linux内核学习 | H4wk1ns's blog</title><meta name="keywords" content="linux,内核"><meta name="author" content="H4wk1ns"><meta name="copyright" content="H4wk1ns"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="前言  为了更好的了解Linux机制，为Kernel Pwn打下基础。则首先从正向分析分析Linux机制(调试源代码)，之后根据后续的需要再继续研究即可 环境搭建编译内核 从镜像链接处下载相关版本的内核代码即可这里选择linux-5.8版本进行研究 执行如下命令，安装相关依赖123sudo apt-get update -y \  &amp;&amp; sudo apt-get install -">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux内核学习">
+<meta property="og:url" content="https://jiaweihawk.gitee.io/2022/02/22/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0/index.html">
+<meta property="og:site_name" content="H4wk1ns&#39;s blog">
+<meta property="og:description" content="前言  为了更好的了解Linux机制，为Kernel Pwn打下基础。则首先从正向分析分析Linux机制(调试源代码)，之后根据后续的需要再继续研究即可 环境搭建编译内核 从镜像链接处下载相关版本的内核代码即可这里选择linux-5.8版本进行研究 执行如下命令，安装相关依赖123sudo apt-get update -y \  &amp;&amp; sudo apt-get install -">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://jiaweihawk.gitee.io/img/background.jpg">
+<meta property="article:published_time" content="2022-02-22T08:35:59.000Z">
+<meta property="article:modified_time" content="2022-06-05T11:17:57.194Z">
+<meta property="article:author" content="H4wk1ns">
+<meta property="article:tag" content="linux">
+<meta property="article:tag" content="内核">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://jiaweihawk.gitee.io/img/background.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.gitee.io/2022/02/22/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容：${query}"}},
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    jQuery: 'https://cdn.jsdelivr.net/npm/jquery@latest/dist/jquery.min.js',
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/js/jquery.justifiedGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/css/justifiedGallery.min.css'
+    },
+    fancybox: {
+      js: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.css'
+    }
+  },
+  isPhotoFigcaption: true,
+  islazyload: false,
+  isanchor: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'linux内核学习',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2022-06-05 19:17:57'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+    const fontSizeVal = saveToLocal.get('global-font-size')
+    if (fontSizeVal !== undefined) {
+      document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
+    }
+    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">linux内核学习</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-02-22T08:35:59.000Z" title="发表于 2022-02-22 16:35:59">2022-02-22</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-06-05T11:17:57.194Z" title="更新于 2022-06-05 19:17:57">2022-06-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">1.9k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>7分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="linux内核学习"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>  为了更好的了解Linux机制，为Kernel Pwn打下基础。则首先从正向分析分析Linux机制(调试源代码)，之后根据后续的需要再继续研究即可</p>
+<h1 id="环境搭建"><a href="#环境搭建" class="headerlink" title="环境搭建"></a>环境搭建</h1><h2 id="编译内核"><a href="#编译内核" class="headerlink" title="编译内核"></a>编译内核</h2><ol>
+<li>从<a target="_blank" rel="noopener" href="https://mirrors.edge.kernel.org/pub/linux/kernel/">镜像链接</a>处下载相关版本的内核代码即可<br>这里选择linux-5.8版本进行研究</li>
+<li>执行如下命令，安装相关依赖<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get update -y \</span><br><span class="line">  &amp;&amp; sudo apt-get install -y \</span><br><span class="line">  fakeroot build-essential ncurses-dev xz-utils libssl-dev bc libelf-dev flex bison dwarves</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令解压内核源代码<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tar -zxvf $(find . -maxdepth 1 -<span class="built_in">type</span> f -name <span class="string">&quot;linux*&quot;</span>)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令配置内核<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;linux*&quot;</span>); make menuconfig)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令编译内核<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;linux*&quot;</span>); make -j4)</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h2 id="编译根文件系统"><a href="#编译根文件系统" class="headerlink" title="编译根文件系统"></a>编译根文件系统</h2><ol>
+<li>从<a target="_blank" rel="noopener" href="https://busybox.net/downloads/">官方链接</a>获取busybox源码</li>
+<li>执行如下命令解压busybox源代码<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tar -jxvf $(find . -maxdepth 1 -<span class="built_in">type</span> f -name <span class="string">&quot;busybox*&quot;</span>)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令配置busybox，选中**Build static binary (no shared libs)<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;busybox*&quot;</span>); make menuconfig)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令编译busybox<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;busybox*&quot;</span>); make -j4; make install)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令创建根文件系统<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">rm -rf fs &amp;&amp; mkdir fs</span><br><span class="line">cp -ar $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;busybox*&quot;</span>)/_install/* fs</span><br><span class="line">mkdir -p fs/&#123;sys,proc,dev,etc/init.d&#125;</span><br><span class="line"></span><br><span class="line">touch fs/etc/inittab</span><br><span class="line"><span class="built_in">echo</span> -n <span class="string">&#x27;::sysinit:/etc/init.d/rcS</span></span><br><span class="line"><span class="string">::respawn:-/bin/sh</span></span><br><span class="line"><span class="string">::restart:/sbin/init&#x27;</span> &gt; fs/etc/inittab</span><br><span class="line"></span><br><span class="line"><span class="built_in">echo</span> -n <span class="string">&#x27;#!/bin/sh</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">mount -t proc none /proc</span></span><br><span class="line"><span class="string">mount -t sysfs none /sys</span></span><br><span class="line"><span class="string">echo /sbin/mdev &gt; /proc/sys/kernel/hotplug</span></span><br><span class="line"><span class="string">mdev -s&#x27;</span> &gt; fs/etc/init.d/rcS</span><br><span class="line">chmod 777 fs/etc/init.d/rcS</span><br><span class="line"></span><br><span class="line">(<span class="built_in">cd</span> fs; find . | cpio -o --format=newc &gt; ../rootfs.cpio)</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h2 id="编译qemu"><a href="#编译qemu" class="headerlink" title="编译qemu"></a>编译qemu</h2><ol>
+<li>从<a target="_blank" rel="noopener" href="https://download.qemu.org/">镜像链接</a>处下载相关版本的qemu代码即可<br>这里选择最新的qemu-6.2.0版本</li>
+<li>执行如下命令，安装相关依赖<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get update -y \</span><br><span class="line">  &amp;&amp; sudo apt-get install -y \</span><br><span class="line">  libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libsdl1.2-dev ninja-build</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令解压qemu源代码<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tar -Jxvf $(find . -maxdepth 1 -<span class="built_in">type</span> f -name <span class="string">&quot;qemu*&quot;</span>)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令配置qemu<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;qemu*&quot;</span>); mkdir -p build; <span class="built_in">cd</span> build; ../configure --target-list=x86_64-softmmu --enable-kvm --enable-sdl)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令编译qemu<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;qemu*&quot;</span>)/build; make -j4; sudo make install)</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h2 id="编译gdb"><a href="#编译gdb" class="headerlink" title="编译gdb"></a>编译gdb</h2><ol>
+<li>从<a target="_blank" rel="noopener" href="https://ftp.gnu.org/gnu/gdb/">镜像链接</a>处下载相关版本的gdb代码即可<br>这里选择gdb-11.2版本</li>
+<li>执行如下命令解压gdb源代码<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tar -Jxvf $(find . -maxdepth 1 -<span class="built_in">type</span> f -name <span class="string">&quot;gdb*&quot;</span>)</span><br></pre></td></tr></table></figure></li>
+<li>按照<a target="_blank" rel="noopener" href="https://wiki.osdev.org/QEMU_and_GDB_in_long_mode#Workaround_2:_Patching_GDB">链接</a>，修复gdb的问题</li>
+<li>执行如下命令配置gdb<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;gdb*&quot;</span>); ./configure --prefix=/usr --with-python=/usr/bin/python3)</span><br></pre></td></tr></table></figure></li>
+<li>执行如下命令编译gdb<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> LDFLAGS=$(/usr/bin/python3-config --ldflags)</span><br><span class="line"><span class="built_in">export</span> LIBS=$(/usr/bin/python3-config --libs)</span><br><span class="line">(<span class="built_in">cd</span> $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;gdb*&quot;</span>); make -j4; sudo make install)</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h2 id="调试内核"><a href="#调试内核" class="headerlink" title="调试内核"></a>调试内核</h2><p>  执行如下命令，启动并调试内核<br>  <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 启动gdb</span></span><br><span class="line">gnome-terminal --<span class="built_in">command</span> <span class="string">&quot;gdb -ex &#x27;set architecture i386:x86-64&#x27; -ex &#x27;add-auto-load-safe-path <span class="subst">$(find . -maxdepth 1 -type d -name <span class="string">&quot;linux*&quot;</span>)</span>/scripts/gdb/vmlinux-gdb.py&#x27; -ex &#x27;add-symbol-file <span class="subst">$(find . -maxdepth 1 -type d -name <span class="string">&quot;linux*&quot;</span>)</span>/vmlinux&#x27; -ex &#x27;target remote localhost:1234&#x27;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 启动qemu</span></span><br><span class="line">qemu-system-x86_64 \</span><br><span class="line">	-initrd rootfs.cpio \</span><br><span class="line">	-kernel $(find . -maxdepth 1 -<span class="built_in">type</span> d -name <span class="string">&quot;linux*&quot;</span>)/arch/x86_64/boot/bzImage \</span><br><span class="line">	-append <span class="string">&#x27;rdinit=/linuxrc oops=panic panic=1 nokaslr&#x27;</span> \</span><br><span class="line">	-enable-kvm \</span><br><span class="line">	-m 128M \</span><br><span class="line">	-smp cores=1,threads=1 \</span><br><span class="line">	-no-shutdown -no-reboot \</span><br><span class="line">	-s -S</span><br></pre></td></tr></table></figure></p>
+<h1 id="内存寻址"><a href="#内存寻址" class="headerlink" title="内存寻址"></a>内存寻址</h1><p>这篇博客参考了非常多的资料，尤其是<a target="_blank" rel="noopener" href="https://0xax.gitbooks.io/linux-insides/content/Booting/linux-bootstrap-1.html">这篇资料</a></p>
+<p>需要明确的是，目前Linux的内存管理机制仍然以<strong>分页</strong>机制为主，仅仅在特殊情况下(如需要32位环境)下，可能会采用<strong>分段</strong>机制</p>
+<h2 id="内存地址"><a href="#内存地址" class="headerlink" title="内存地址"></a>内存地址</h2><p>下面主要以Intel的80x86CPU来介绍(因为其他的架构基本只支持分页机制)</p>
+<p>其整体内存寻址的流程如下所示<br><img src="内存寻址.png" alt="内存寻址"></p>
+<p>80x86CPU从上电启动到完成Linux内核初始化，需要经历<strong>实模式</strong>(Real Mode) -&gt; <strong>保护模式</strong>(Protect Mode) -&gt; <strong>长模式</strong>(Long Mode)</p>
+<h3 id="实模式"><a href="#实模式" class="headerlink" title="实模式"></a>实模式</h3><blockquote>
+<p>实模式指的是<strong>16位</strong>的CPU可以访问<strong>1MB</strong>的内存</p>
+</blockquote>
+<p>为了实现实模式，其每一个逻辑地址，都由<strong>一个16位的段</strong>(segment)和<strong>一个16位的偏移量</strong>(offset)构成。<br>而线性地址，则是逻辑地址的运算结果，即<strong>Linear Address = Segment * 16 + Offset</strong><br>则这里，没有过多的保护机制，因此CPU的线性地址就是CPU的物理地址</p>
+<h3 id="保护模式"><a href="#保护模式" class="headerlink" title="保护模式"></a>保护模式</h3><p><strong>保护模式</strong>在<strong>实模式</strong>的基础上(即逻辑地址仍然由<strong>段</strong>和<strong>偏移</strong>组成)，添加了额外的机制(即<strong>分段机制</strong>)</p>
+<h4 id="段选择符-Segment-Selector"><a href="#段选择符-Segment-Selector" class="headerlink" title="段选择符(Segment Selector)"></a>段选择符(Segment Selector)</h4><p>段选择符布局如下所示<br><img src="段选择符.png" alt="段选择符"></p>
+<p>段选择符的各个字段及其含义如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">字段名</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">index</td>
+<td style="text-align:center">存放在<strong>GDT</strong>或<strong>LDT</strong>中的段描述符的下标</td>
+</tr>
+<tr>
+<td style="text-align:center">TI</td>
+<td style="text-align:center">Table Indicator标志；指明段描述符是在<strong>GDT</strong>中(TI=0)，亦或是<strong>LDT</strong>中(TI=1)</td>
+</tr>
+<tr>
+<td style="text-align:center">RPL</td>
+<td style="text-align:center">请求者特权级(Request Privilege Level)。当相应的段选择符装入到cs寄存器中时，指示CPU当前的特权级</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h4 id="段描述符-Segment-Descriptor"><a href="#段描述符-Segment-Descriptor" class="headerlink" title="段描述符(Segment Descriptor)"></a>段描述符(Segment Descriptor)</h4><p>段选择符在相关<strong>段描述符表</strong>中，指定段描述符</p>
+<p>段描述符布局如下所示<br><img src="段描述符.png" alt="段描述符"></p>
+<p>段描述符的各个字段及其含义如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">字段名</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">Base</td>
+<td style="text-align:center">段首字节的线性地址</td>
+</tr>
+<tr>
+<td style="text-align:center">G</td>
+<td style="text-align:center">粒度标志；指明段大小是以<strong>字节</strong>为单位(G=0)，亦或是<strong>4096字节</strong>为单位(G=1)</td>
+</tr>
+<tr>
+<td style="text-align:center">Limit</td>
+<td style="text-align:center">段最后一个字节的偏移量</td>
+</tr>
+<tr>
+<td style="text-align:center">S</td>
+<td style="text-align:center">系统标志；指明存储<strong>系统段</strong>(S=0)，亦或是普通代码段或数据段(S=1)</td>
+</tr>
+<tr>
+<td style="text-align:center">Type</td>
+<td style="text-align:center">段的类型及其存储权限</td>
+</tr>
+<tr>
+<td style="text-align:center">DPL</td>
+<td style="text-align:center">描述符特权级(Descriptor Privilege Level)。表示访问这个段所要求的CPU最小的优先级</td>
+</tr>
+<tr>
+<td style="text-align:center">P</td>
+<td style="text-align:center">Segment-Present标志。表示当前段在内存中(P=1)，亦或是不在内存中(P=0)</td>
+</tr>
+<tr>
+<td style="text-align:center">D/B</td>
+<td style="text-align:center"></td>
+</tr>
+<tr>
+<td style="text-align:center">AVL</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>有了<strong>段选择符</strong>和<strong>段描述符</strong>的概念后，其获取线性地址的过程如下所示<br><img src="逻辑地址转换.png" alt="逻辑地址转换"></p>
+<p>而这里还没由开启分页机制，则其<strong>线性地址</strong>就是实际的<strong>物理地址</strong></p>
+<h3 id="长模式"><a href="#长模式" class="headerlink" title="长模式"></a>长模式</h3><p>实际上，Linux通过一些小<strong>trick</strong>，从而让<strong>保护模式</strong>的<strong>段</strong>寄存器在Linux中的存在感<strong>不明显</strong></p>
+<ul>
+<li>对于32位模式来说<br>其将<strong>代码段</strong>和<strong>数据段</strong>的段描述符的<strong>Base</strong>字段设为0，将<strong>Limit</strong>字段设置为0xffffffff<br>从而将<strong>逻辑地址的偏移</strong>直接映射为线性地址</li>
+<li>对于64位模式来说<br>由于Intel如下的硬件设置<br><img src="段寄存器-64位模式.png" alt="段寄存器-64位模式"><br>因此也是将<strong>逻辑地址的偏移</strong>直接映射为线性地址</li>
+</ul>
+<p>因此，在Linux内核中，其分段机制，总是将<strong>逻辑地址的偏移</strong>直接映射为线性地址。<br>而在长模式下，其开启了分页机制，则<strong>线性地址</strong>需要经过<strong>页表映射</strong>，才会转换为实际的<strong>物理地址</strong></p>
+<p>Linux内核支持多种分页模式(即使分页模式相同，在不同CPU架构下有不同参数)，下面简单分析Intel的<strong>80x86</strong>架构下主要的分页模式，如下所示<br><img src="linux分页机制.png" alt="linux分页机制"></p>
+<p>其中，Intel的<strong>80x86</strong>架构的CPU通过设置<strong>cr0</strong>、<strong>cr3</strong>，来控制<strong>分页机制</strong>的参数，具体如下所示<br><img src="控制寄存器.png" alt="控制寄存器"></p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">寄存器</th>
+<th style="text-align:center">标志位</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">cr0</td>
+<td style="text-align:center">PG位(31bit)</td>
+<td style="text-align:center">开启分页机制(PG=1)，亦或是关闭分页机制(PG=0)</td>
+</tr>
+<tr>
+<td style="text-align:center">cr0</td>
+<td style="text-align:center">PE位(0bit)</td>
+<td style="text-align:center">开启保护模式(PE=1)，亦或是关闭保护模式(PE=0)。要开启分页机制，必须开启该位</td>
+</tr>
+<tr>
+<td style="text-align:center">cr3</td>
+<td style="text-align:center">(51bit-12bit)</td>
+<td style="text-align:center">存储页表最高层结构的物理地址</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>而关于Linux在<strong>80x86</strong>架构的具体页表实现细节，其是<strong>PAGE-mode depends</strong>，因此这里就不在研究了(没那个精力)，等到需要的时候在翻阅资料即可。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.gitee.io/2022/02/22/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0/">https://jiaweihawk.gitee.io/2022/02/22/linux内核学习/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.gitee.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2022/02/07/%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%89/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">编译原理-设计与实现-三</div></div></a></div><div class="next-post pull-right"><a href="/2022/02/27/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%BA%8C/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">linux内核学习-二</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2022/04/26/linux内核学习-七/" title="linux内核学习-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-26</div><div class="title">linux内核学习-七</div></div></a></div><div><a href="/2022/03/07/linux内核学习-三/" title="linux内核学习-三"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-03-07</div><div class="title">linux内核学习-三</div></div></a></div><div><a href="/2022/05/11/linux内核学习-九/" title="linux内核学习-九"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-11</div><div class="title">linux内核学习-九</div></div></a></div><div><a href="/2022/02/27/linux内核学习-二/" title="linux内核学习-二"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-02-27</div><div class="title">linux内核学习-二</div></div></a></div><div><a href="/2022/04/01/linux内核学习-五/" title="linux内核学习-五"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-01</div><div class="title">linux内核学习-五</div></div></a></div><div><a href="/2022/04/28/linux内核学习-八/" title="linux内核学习-八"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-28</div><div class="title">linux内核学习-八</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA"><span class="toc-number">2.</span> <span class="toc-text">环境搭建</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%86%85%E6%A0%B8"><span class="toc-number">2.1.</span> <span class="toc-text">编译内核</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E6%A0%B9%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F"><span class="toc-number">2.2.</span> <span class="toc-text">编译根文件系统</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91qemu"><span class="toc-number">2.3.</span> <span class="toc-text">编译qemu</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91gdb"><span class="toc-number">2.4.</span> <span class="toc-text">编译gdb</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E8%AF%95%E5%86%85%E6%A0%B8"><span class="toc-number">2.5.</span> <span class="toc-text">调试内核</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E5%AF%BB%E5%9D%80"><span class="toc-number">3.</span> <span class="toc-text">内存寻址</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E5%9C%B0%E5%9D%80"><span class="toc-number">3.1.</span> <span class="toc-text">内存地址</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E6%A8%A1%E5%BC%8F"><span class="toc-number">3.1.1.</span> <span class="toc-text">实模式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BF%9D%E6%8A%A4%E6%A8%A1%E5%BC%8F"><span class="toc-number">3.1.2.</span> <span class="toc-text">保护模式</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AE%B5%E9%80%89%E6%8B%A9%E7%AC%A6-Segment-Selector"><span class="toc-number">3.1.2.1.</span> <span class="toc-text">段选择符(Segment Selector)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AE%B5%E6%8F%8F%E8%BF%B0%E7%AC%A6-Segment-Descriptor"><span class="toc-number">3.1.2.2.</span> <span class="toc-text">段描述符(Segment Descriptor)</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%95%BF%E6%A8%A1%E5%BC%8F"><span class="toc-number">3.1.3.</span> <span class="toc-text">长模式</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/26/xv6-%E4%B8%89/" title="xv6-三">xv6-三</a><time datetime="2022-05-26T01:46:10.000Z" title="发表于 2022-05-26 09:46:10">2022-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/21/xv6-%E4%BA%8C/" title="xv6-二">xv6-二</a><time datetime="2022-05-21T14:24:40.000Z" title="发表于 2022-05-21 22:24:40">2022-05-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/19/xv6/" title="xv6">xv6</a><time datetime="2022-05-19T12:05:10.000Z" title="发表于 2022-05-19 20:05:10">2022-05-19</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
+  window.MathJax = {
+    loader: {
+      source: {
+        '[tex]/amsCd': '[tex]/amscd'
+      }
+    },
+    tex: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"]],
+      tags: 'ams'
+    },
+    options: {
+      renderActions: {
+        findScript: [10, doc => {
+          for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+            const display = !!node.type.match(/; *mode=display/)
+            const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+            const text = document.createTextNode('')
+            node.parentNode.replaceChild(text, node)
+            math.start = {node: text, delim: '', n: 0}
+            math.end = {node: text, delim: '', n: 0}
+            doc.math.push(math)
+          }
+        }, ''],
+        addClass: [200,() => {
+          document.querySelectorAll('mjx-container:not([display=\'true\']').forEach( node => {
+            const target = node.parentNode
+            if (!target.classList.contains('has-jax')) {
+              target.classList.add('mathjax-overflow')
+            }
+          })
+        }, '', false]
+      }
+    }
+  }
+  
+  const script = document.createElement('script')
+  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+  script.id = 'MathJax-script'
+  script.async = true
+  document.head.appendChild(script)
+} else {
+  MathJax.startup.document.state(0)
+  MathJax.texReset()
+  MathJax.typeset()
+}</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

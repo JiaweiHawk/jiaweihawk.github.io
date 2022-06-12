@@ -1,0 +1,817 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><title>linux内核学习-四 | H4wk1ns's blog</title><meta name="keywords" content="linux,内核"><meta name="author" content="H4wk1ns"><meta name="copyright" content="H4wk1ns"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="前言这篇博客讲解一下Linux的虚拟文件系统机制，其包含的内容和细节十分之多 虚拟文件系统Linux内核通过虚拟文件系统(Virtual Filesystem Switch)，从而可以健壮的为各种不同的文件系统提供一个通用的接口 具体的，VFS将文件系统划分为三种类型  磁盘文件系统这些文件系统管理在本地磁盘分区中的可用存储空间，或其他可以起到磁盘作用的设备。例如Linux的第二拓展文件系统(Ex">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux内核学习-四">
+<meta property="og:url" content="https://jiaweihawk.gitee.io/2022/03/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%9B%9B/index.html">
+<meta property="og:site_name" content="H4wk1ns&#39;s blog">
+<meta property="og:description" content="前言这篇博客讲解一下Linux的虚拟文件系统机制，其包含的内容和细节十分之多 虚拟文件系统Linux内核通过虚拟文件系统(Virtual Filesystem Switch)，从而可以健壮的为各种不同的文件系统提供一个通用的接口 具体的，VFS将文件系统划分为三种类型  磁盘文件系统这些文件系统管理在本地磁盘分区中的可用存储空间，或其他可以起到磁盘作用的设备。例如Linux的第二拓展文件系统(Ex">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://jiaweihawk.gitee.io/img/background.jpg">
+<meta property="article:published_time" content="2022-03-14T06:13:59.000Z">
+<meta property="article:modified_time" content="2022-06-05T11:17:57.190Z">
+<meta property="article:author" content="H4wk1ns">
+<meta property="article:tag" content="linux">
+<meta property="article:tag" content="内核">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://jiaweihawk.gitee.io/img/background.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.gitee.io/2022/03/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%9B%9B/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容：${query}"}},
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    jQuery: 'https://cdn.jsdelivr.net/npm/jquery@latest/dist/jquery.min.js',
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/js/jquery.justifiedGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/css/justifiedGallery.min.css'
+    },
+    fancybox: {
+      js: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.css'
+    }
+  },
+  isPhotoFigcaption: true,
+  islazyload: false,
+  isanchor: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'linux内核学习-四',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2022-06-05 19:17:57'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+    const fontSizeVal = saveToLocal.get('global-font-size')
+    if (fontSizeVal !== undefined) {
+      document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
+    }
+    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">linux内核学习-四</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-03-14T06:13:59.000Z" title="发表于 2022-03-14 14:13:59">2022-03-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-06-05T11:17:57.190Z" title="更新于 2022-06-05 19:17:57">2022-06-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">3.6k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>12分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="linux内核学习-四"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>这篇博客讲解一下Linux的<strong>虚拟文件系统</strong>机制，其包含的内容和细节十分之多</p>
+<h1 id="虚拟文件系统"><a href="#虚拟文件系统" class="headerlink" title="虚拟文件系统"></a>虚拟文件系统</h1><p>Linux内核通过<strong>虚拟文件系统</strong>(Virtual Filesystem Switch)，从而可以健壮的为各种不同的文件系统提供一个通用的接口<br><img src="虚拟文件系统总览.png" alt="虚拟文件系统总览"></p>
+<p>具体的，<strong>VFS</strong>将文件系统划分为三种类型</p>
+<ul>
+<li><strong>磁盘文件系统</strong><br>这些文件系统管理在本地磁盘分区中的可用存储空间，或其他可以起到磁盘作用的设备。例如Linux的<strong>第二拓展文件系统</strong>(Ext2)或微软的<strong>VFAT</strong>文件系统</li>
+<li><strong>网络文件系统</strong><br>这些文件系统允许轻易地访问属于其他网络计算机的文件系统所包含的文件。例如微软的<strong>CIFS</strong>文件系统</li>
+<li><strong>特殊文件系统</strong><br>这些文件系统不参与管理本地或远程的磁盘空间。例如<strong>/proc</strong>文件系统</li>
+</ul>
+<h1 id="通用文件模型"><a href="#通用文件模型" class="headerlink" title="通用文件模型"></a>通用文件模型</h1><p><strong>VFS</strong>引入<strong>通用文件模型</strong>(common file model)，用以抽象其支持的所有文件系统。<strong>通用文件模型</strong>采用面向对象的思想，定义了对象的数据结构，和其上的操作方法。<strong>通用文件类型</strong>使用类似<strong>C++</strong>的<strong>虚表</strong>方法进行实现。</p>
+<p><strong>通用文件类型</strong>由下列四个对象类型组成</p>
+<ul>
+<li><strong>超级块对象</strong>(superblock object) </li>
+<li><strong>索引节点对象</strong>(inode object)</li>
+<li><strong>文件对象</strong>(file object)</li>
+<li><strong>目标项对象</strong>(dentry object)</li>
+</ul>
+<p><img src="VFS对象类型.png" alt="VFS对象类型"></p>
+<h2 id="struct-super-block"><a href="#struct-super-block" class="headerlink" title="struct super_block"></a>struct super_block</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L1457">include/linux/fs.h</a>的结构体，来管理<strong>超级块</strong>对象。其相关的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">s_list</td>
+<td style="text-align:center">指向超级块链表</td>
+</tr>
+<tr>
+<td style="text-align:center">dev_t</td>
+<td style="text-align:center">s_dev</td>
+<td style="text-align:center">设备标识符</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">s_blocksize</td>
+<td style="text-align:center">以字节为单位的块大小</td>
+</tr>
+<tr>
+<td style="text-align:center">loff_t</td>
+<td style="text-align:center">s_maxbytes</td>
+<td style="text-align:center">文件的最大长度</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct file_system_type *</td>
+<td style="text-align:center">s_type</td>
+<td style="text-align:center">文件系统类型</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct super_operations *</td>
+<td style="text-align:center">s_op</td>
+<td style="text-align:center">该超级块的方法</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct dquot_operations *</td>
+<td style="text-align:center">dq_op</td>
+<td style="text-align:center">磁盘限额处理方法</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct quotactl_ops *</td>
+<td style="text-align:center">s_qcop</td>
+<td style="text-align:center">磁盘限额管理方法</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct export_operations</td>
+<td style="text-align:center">s_export_op</td>
+<td style="text-align:center">网络文件系统使用的输出方法</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">s_flags</td>
+<td style="text-align:center">安装标志</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">s_magic</td>
+<td style="text-align:center">文件系统的魔数</td>
+</tr>
+<tr>
+<td style="text-align:center">struct dentry *</td>
+<td style="text-align:center">s_root</td>
+<td style="text-align:center">文件系统根目录的目录项对象</td>
+</tr>
+<tr>
+<td style="text-align:center">struct rw_semaphore</td>
+<td style="text-align:center">s_umount</td>
+<td style="text-align:center">卸载所用的信号量</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">s_count</td>
+<td style="text-align:center">引用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">s_active</td>
+<td style="text-align:center">次级引用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">s_security</td>
+<td style="text-align:center">指向超级块安全数据结构的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct xattr_handler **</td>
+<td style="text-align:center">s_xattr</td>
+<td style="text-align:center">指向超级块属性结构的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct block_device *</td>
+<td style="text-align:center">s_bdev</td>
+<td style="text-align:center">指向块设备驱动程序描述符的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct hlist_node</td>
+<td style="text-align:center">s_instances</td>
+<td style="text-align:center">用于给定文件系统类型的超级块对象链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">s_fs_info</td>
+<td style="text-align:center">指向特定文件系统的超级块信息的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">char[32]</td>
+<td style="text-align:center">s_id</td>
+<td style="text-align:center">包含超级块的块设备名称</td>
+</tr>
+<tr>
+<td style="text-align:center">__u32</td>
+<td style="text-align:center">s_time_gran</td>
+<td style="text-align:center">时间戳的粒度</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">s_inodes</td>
+<td style="text-align:center">该文件对应的</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>其中，其<strong>s_op</strong>字段就是<strong>超级块</strong>的<strong>虚表</strong>，描述<strong>超级块对象</strong>所支持的相关操作，该字段结构体定义于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L2106">include/linux/fs.h</a></p>
+<p>总的来说，<strong>超级块</strong>对象记录一个<strong>mount</strong>的文件系统的描述信息(如文件系统类型、文件系统包含的inode等)</p>
+<h2 id="struct-inode"><a href="#struct-inode" class="headerlink" title="struct inode"></a>struct inode</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L614">include/linux/fs.h</a>的结构体，来管理<strong>索引节点</strong>对象。其相关的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">umode_t</td>
+<td style="text-align:center">i_mode</td>
+<td style="text-align:center">文件类型与访问权限</td>
+</tr>
+<tr>
+<td style="text-align:center">uid_t</td>
+<td style="text-align:center">i_uid</td>
+<td style="text-align:center">所有者标识符</td>
+</tr>
+<tr>
+<td style="text-align:center">gid_t</td>
+<td style="text-align:center">i_gid</td>
+<td style="text-align:center">组标识符</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">i_flags</td>
+<td style="text-align:center">文件系统的安装标志</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct inode_operations *</td>
+<td style="text-align:center">i_op</td>
+<td style="text-align:center">索引节点的操作</td>
+</tr>
+<tr>
+<td style="text-align:center">struct super_block *</td>
+<td style="text-align:center">i_sb</td>
+<td style="text-align:center">指向超级块对象的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct address_space *</td>
+<td style="text-align:center">i_mapping</td>
+<td style="text-align:center">指向address space对象的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">i_ino</td>
+<td style="text-align:center">索引节点号</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">i_nlink</td>
+<td style="text-align:center">硬链接数目</td>
+</tr>
+<tr>
+<td style="text-align:center">dev_t</td>
+<td style="text-align:center">i_rdev</td>
+<td style="text-align:center">实设备标识符</td>
+</tr>
+<tr>
+<td style="text-align:center">loff_t</td>
+<td style="text-align:center">i_size</td>
+<td style="text-align:center">文件的字节数</td>
+</tr>
+<tr>
+<td style="text-align:center">struct timespec64</td>
+<td style="text-align:center">i_atime</td>
+<td style="text-align:center">上次访问文件的时间</td>
+</tr>
+<tr>
+<td style="text-align:center">struct timespec64</td>
+<td style="text-align:center">i_mtime</td>
+<td style="text-align:center">上次写文件的时间</td>
+</tr>
+<tr>
+<td style="text-align:center">struct timespec64</td>
+<td style="text-align:center">i_ctime</td>
+<td style="text-align:center">上次修改索引节点的时间</td>
+</tr>
+<tr>
+<td style="text-align:center">blkcnt_t</td>
+<td style="text-align:center">i_blocks</td>
+<td style="text-align:center">文件的块数</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">i_state</td>
+<td style="text-align:center">索引节点的状态标志</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">dirtied_when</td>
+<td style="text-align:center">索引节点的弄脏时间</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">i_sb_list</td>
+<td style="text-align:center">用于超级块的索引节点链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">i_dentry</td>
+<td style="text-align:center">引用索引节点的目录项对象链表的头</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">i_count</td>
+<td style="text-align:center">引用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct file_operations *</td>
+<td style="text-align:center">i_fop</td>
+<td style="text-align:center">缺省文件操作</td>
+</tr>
+<tr>
+<td style="text-align:center">struct address_space</td>
+<td style="text-align:center">i_data</td>
+<td style="text-align:center">文件的address_space对象</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">i_devices</td>
+<td style="text-align:center">用于具体的字符或块设备索引节点链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct pipe_inode_info *</td>
+<td style="text-align:center">i_pipe</td>
+<td style="text-align:center">如果文件是一个管道，则使用该字段</td>
+</tr>
+<tr>
+<td style="text-align:center">__u32</td>
+<td style="text-align:center">i_generation</td>
+<td style="text-align:center">索引节点版本号</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>其中，其<strong>i_op</strong>字段就是<strong>索引节点</strong>的<strong>虚表</strong>，描述<strong>索引节点</strong>所支持的相关操作，该字段结构体定义于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L2024">include/linux/fs.h</a></p>
+<p>总的来说，<strong>索引节点</strong>对象记录一个文件(目录)所需的描述数据(如文件的块数、文件最后一个块的字节数)</p>
+<h2 id="struct-file"><a href="#struct-file" class="headerlink" title="struct file"></a>struct file</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L956">include/linux/fs.h</a>的结构体，来管理<strong>打开文件</strong>对象。其相关的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct path</td>
+<td style="text-align:center">f_path</td>
+<td style="text-align:center">与文件相关的文件安装系统、目录项信息</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct file_operations*</td>
+<td style="text-align:center">f_op</td>
+<td style="text-align:center">文件操作表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_long_t</td>
+<td style="text-align:center">f_count</td>
+<td style="text-align:center">文件对象的引用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">f_flags</td>
+<td style="text-align:center">打开文件时所指定的标志信息</td>
+</tr>
+<tr>
+<td style="text-align:center">fmode_t</td>
+<td style="text-align:center">f_mode</td>
+<td style="text-align:center">进程对打开文件的访问模式</td>
+</tr>
+<tr>
+<td style="text-align:center">loff_t</td>
+<td style="text-align:center">f_pos</td>
+<td style="text-align:center">当前的文件偏移量</td>
+</tr>
+<tr>
+<td style="text-align:center">struct fown_struct</td>
+<td style="text-align:center">f_owner</td>
+<td style="text-align:center">通过信号进行I/O事件通知的数据</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct cred*</td>
+<td style="text-align:center">f_cred</td>
+<td style="text-align:center">打开文件所有者的相关信息</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">private_data</td>
+<td style="text-align:center">指向特定文件系统或设备驱动程序所需的数据</td>
+</tr>
+<tr>
+<td style="text-align:center">struct address_space *</td>
+<td style="text-align:center">f_mapping</td>
+<td style="text-align:center">指向文件地址空间对象</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>其中，其<strong>f_op</strong>字段就是<strong>打开文件</strong>的<strong>虚表</strong>，描述<strong>打开文件</strong>所支持的相关操作，该字段结构体定义于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L1981">include/linux/fs.h</a></p>
+<p>总的来说，<strong>打开文件</strong>对象记录进程打开文件(目录)的方式(如进程访问对象的权限、进程访问对象的模式)</p>
+<h2 id="struct-dentry"><a href="#struct-dentry" class="headerlink" title="struct dentry"></a>struct dentry</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/dcache.h#L81">include/linux/dcache.h</a>的结构体，来管理<strong>目录项</strong>对象。其相关的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">d_flags</td>
+<td style="text-align:center">目录项高速缓存标志</td>
+</tr>
+<tr>
+<td style="text-align:center">struct hlist_bl_node</td>
+<td style="text-align:center">d_hash</td>
+<td style="text-align:center">指向散列表表项链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct dentry *</td>
+<td style="text-align:center">d_parent</td>
+<td style="text-align:center">父目录的目录项对象</td>
+</tr>
+<tr>
+<td style="text-align:center">struct qstr</td>
+<td style="text-align:center">d_name</td>
+<td style="text-align:center">文件名称</td>
+</tr>
+<tr>
+<td style="text-align:center">struct inode *</td>
+<td style="text-align:center">d_inode</td>
+<td style="text-align:center">与文件名关联的索引节点对象</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned char[]</td>
+<td style="text-align:center">d_iname</td>
+<td style="text-align:center">短文件名称</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct dentry_operations *</td>
+<td style="text-align:center">d_op</td>
+<td style="text-align:center">目录项方法</td>
+</tr>
+<tr>
+<td style="text-align:center">struct super_block *</td>
+<td style="text-align:center">d_sb</td>
+<td style="text-align:center">文件的超级块对象</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">d_time</td>
+<td style="text-align:center">由<strong>d_revalidate</strong>方法使用</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">d_fsdata</td>
+<td style="text-align:center">依赖于文件系统的数据</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">d_lru</td>
+<td style="text-align:center">用于未使用目录项链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">d_child</td>
+<td style="text-align:center">对目录而言，用于同一父目录中的目录项链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">d_subdirs</td>
+<td style="text-align:center">对目录而言，其子目录链表的头</td>
+</tr>
+<tr>
+<td style="text-align:center">struct hlist_node</td>
+<td style="text-align:center">d_alias</td>
+<td style="text-align:center">用于与同一索引节点(别名)相关的目录项链表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct rcu_head</td>
+<td style="text-align:center">d_rcu</td>
+<td style="text-align:center">回收目录项对象时，由RCU描述符使用</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>其中，其<strong>d_op</strong>字段就是<strong>目录项</strong>的<strong>虚表</strong>，描述<strong>目录项</strong>所支持的相关操作，该字段结构体定义于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/dcache.h#L127">include/linux/dcache.h</a></p>
+<p>总的来说，<strong>目录项</strong>对象表示<strong>逻辑意义上</strong>的目录的对象，每一个<strong>目录项</strong>，有且仅有一个<strong>索引节点</strong>对象与其对应。更直白的说法，就是<strong>目录项</strong>对象表示目录中的对象(子文件和子目录)</p>
+<h1 id="与进程相关的文件"><a href="#与进程相关的文件" class="headerlink" title="与进程相关的文件"></a>与进程相关的文件</h1><h2 id="struct-fs-struct"><a href="#struct-fs-struct" class="headerlink" title="struct fs_struct"></a>struct fs_struct</h2><p>每个进程都有其自己的当前工作目录、其自己的根目录。Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs_struct.h#L9">include/linux/fs_struct.h</a>的结构体，来管理进程所必需的文件信息。其重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">users</td>
+<td style="text-align:center">共享该表的进程个数</td>
+</tr>
+<tr>
+<td style="text-align:center">spinlock_t</td>
+<td style="text-align:center">lock</td>
+<td style="text-align:center">表中字段的自旋锁</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">umask</td>
+<td style="text-align:center">当打开文件时，设置文件权限时所使用的位掩码</td>
+</tr>
+<tr>
+<td style="text-align:center">struct path</td>
+<td style="text-align:center">root</td>
+<td style="text-align:center">根目录的目录项对象</td>
+</tr>
+<tr>
+<td style="text-align:center">struct path</td>
+<td style="text-align:center">pwd</td>
+<td style="text-align:center">当前工作目录的目录项</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="struct-files-struct"><a href="#struct-files-struct" class="headerlink" title="struct files_struct"></a>struct files_struct</h2><p>每个进程同样有自己的打开文件。Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fdtable.h#L49">include/linux/fdtable.h</a>的结构体，来管理进程所必需的文件信息。其重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">count</td>
+<td style="text-align:center">共享该表的进程数目</td>
+</tr>
+<tr>
+<td style="text-align:center">struct fdtable __rcu *</td>
+<td style="text-align:center">fdt</td>
+<td style="text-align:center">指向文件对象数组的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">next_fd</td>
+<td style="text-align:center">所分配的最大文件描述符 + 1</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long[1]</td>
+<td style="text-align:center">close_on_exec_init</td>
+<td style="text-align:center">执行<strong>exec()</strong>时，需要关闭的文件描述符的初始集合</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long[1]</td>
+<td style="text-align:center">open_dfs_init</td>
+<td style="text-align:center">文件描述符的初始集合</td>
+</tr>
+<tr>
+<td style="text-align:center">struct file __rcu *[]</td>
+<td style="text-align:center">fd_array</td>
+<td style="text-align:center">文件对象指针的初始化数组</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h1 id="文件系统处理"><a href="#文件系统处理" class="headerlink" title="文件系统处理"></a>文件系统处理</h1><p>为了更直观的了解整个文件系统的工作原理，这里借用知乎<a target="_blank" rel="noopener" href="https://www.zhihu.com/people/zorrolang">醉卧沙场</a>的示意图，展示文件处理的整体框架<br><img src="mount.jpg" alt="文件系统框架"></p>
+<h2 id="struct-file-system-type"><a href="#struct-file-system-type" class="headerlink" title="struct file_system_type"></a>struct file_system_type</h2><p>文件系统的<strong>代码</strong>要么包含在<strong>内核映象</strong>中，要么作为<strong>模块</strong>被动态载入</p>
+<p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/fs.h#L2428">include/linux/fs.h</a>的结构体，来管理Linux中注册的文件系统类型。其重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">const char *</td>
+<td style="text-align:center">name</td>
+<td style="text-align:center">文件系统名称</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">fs_flags</td>
+<td style="text-align:center">文件系统类型标志</td>
+</tr>
+<tr>
+<td style="text-align:center">int (<em>)(struct fs_context</em>)</td>
+<td style="text-align:center">init_fs_context</td>
+<td style="text-align:center">初始化超级块的相关方法</td>
+</tr>
+<tr>
+<td style="text-align:center">void (<em>)(struct super_block </em>)</td>
+<td style="text-align:center">kill_sb</td>
+<td style="text-align:center">删除超级块</td>
+</tr>
+<tr>
+<td style="text-align:center">struct module *</td>
+<td style="text-align:center">owner</td>
+<td style="text-align:center">指向实现文件系统的模块的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct file_system_type *</td>
+<td style="text-align:center">next</td>
+<td style="text-align:center">指向文件系统类型链表中下一个元素的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct hlist_head</td>
+<td style="text-align:center">fs_supers</td>
+<td style="text-align:center">具有相同文件系统类型的超级块对象链表的头</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Linux调用<code>register_filesystem(struct file_system_type *fs)</code>，注册实现的文件系统类型；当不需要时，再调用<code>unregister_filesystem(struct file_system_type *fs)</code>注释文件系统类型</p>
+<h2 id="文件系统安装"><a href="#文件系统安装" class="headerlink" title="文件系统安装"></a>文件系统安装</h2><h3 id="整体框架"><a href="#整体框架" class="headerlink" title="整体框架"></a>整体框架</h3><p>Linux使用<strong>根文件系统</strong>(root filesystem)：其由内核在<strong>引导阶段</strong>直接安装，包含系统初始化脚本，以及最基本的系统程序等数据</p>
+<p>其他文件系统，要么通过初始化脚本安装；要么由用户直接安装在已安装文件系统的目录上。<br>也就是，作为一个目录树，每个文件系统都拥有自己的<strong>根目录</strong>(root directory)。安装文件系统的这个目录称之为<strong>安装点</strong>(mount point)</p>
+<h3 id="struct-vfsmount"><a href="#struct-vfsmount" class="headerlink" title="struct vfsmount"></a>struct vfsmount</h3><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/mount.h#L71">include/linux/mount.h</a>的结构体，来管理Linux中文件系统的安装信息。其重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct dentry *</td>
+<td style="text-align:center">mnt_root</td>
+<td style="text-align:center">指向该文件系统根目录的dentry</td>
+</tr>
+<tr>
+<td style="text-align:center">struct super_block *</td>
+<td style="text-align:center">mnt_sb</td>
+<td style="text-align:center">指向该文件系统的超级块对象</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">mnt_flags</td>
+<td style="text-align:center">该文件系统相关的标志信息</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>这里需要特别说明的是:<br>在Linux中，同一个文件系统，可被安装多次<br>但是无论安装几次，其文件系统永远是唯一的，即有且仅有一个超级块对象</p>
+<h3 id="安装普通文件系统"><a href="#安装普通文件系统" class="headerlink" title="安装普通文件系统"></a>安装普通文件系统</h3><p>即<strong>某一个文件系统</strong>将被安装在<strong>一个已安装文件系统</strong>之上</p>
+<p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/fs/namespace.c#L3358">fs/namespace.c</a>的<code>long do_mount(const char *dev_name, const char __user *dir_name, const char *type_page, unsigned long flags, void *data_page)</code>函数，安装一个普通文件系统</p>
+<p>下面给出简化很多细节的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">long</span> <span class="title">do_mount</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span> *dev_name, <span class="keyword">const</span> <span class="keyword">char</span> __user *dir_name,</span></span></span><br><span class="line"><span class="params"><span class="function">		<span class="keyword">const</span> <span class="keyword">char</span> *type_page, <span class="keyword">unsigned</span> <span class="keyword">long</span> flags, <span class="keyword">void</span> *data_page)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">path</span> <span class="title">path</span>;</span></span><br><span class="line">	ret = user_path_at(AT_FDCWD, dir_name, LOOKUP_FOLLOW, &amp;path);</span><br><span class="line">	ret = path_mount(dev_name, &amp;path, type_page, flags, data_page);</span><br><span class="line">	path_put(&amp;path);</span><br><span class="line">	<span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">path_mount</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span> *dev_name, struct path *path,</span></span></span><br><span class="line"><span class="params"><span class="function">		<span class="keyword">const</span> <span class="keyword">char</span> *type_page, <span class="keyword">unsigned</span> <span class="keyword">long</span> flags, <span class="keyword">void</span> *data_page)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> do_new_mount(path, type_page, sb_flags, mnt_flags, dev_name,</span><br><span class="line">			    data_page);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">do_new_mount</span><span class="params">(struct path *path, <span class="keyword">const</span> <span class="keyword">char</span> *fstype, <span class="keyword">int</span> sb_flags,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">int</span> mnt_flags, <span class="keyword">const</span> <span class="keyword">char</span> *name, <span class="keyword">void</span> *data)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">file_system_type</span> *<span class="title">type</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">fs_context</span> *<span class="title">fc</span>;</span></span><br><span class="line"></span><br><span class="line">	type = get_fs_type(fstype);</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">fs_context</span> *<span class="title">fc</span> =</span> fs_context_for_mount(type, sb_flags);</span><br><span class="line"></span><br><span class="line">	err = do_new_mount_fc(fc, path, mnt_flags);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">do_new_mount_fc</span><span class="params">(struct fs_context *fc, struct path *mountpoint,</span></span></span><br><span class="line"><span class="params"><span class="function">			   <span class="keyword">unsigned</span> <span class="keyword">int</span> mnt_flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line"></span><br><span class="line">	mnt = vfs_create_mount(fc);</span><br><span class="line">	error = do_add_mount(real_mount(mnt), mp, mountpoint, mnt_flags);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是根据<strong>指定文件系统</strong>中的<strong>操作函数指针</strong>，从而获取该<strong>文件系统</strong>对应的<strong>超级块对象</strong>，并为该<strong>文件系统</strong>的安装，分配<strong>struct vfsmount</strong>结构进行管理。</p>
+<h3 id="安装根文件系统"><a href="#安装根文件系统" class="headerlink" title="安装根文件系统"></a>安装根文件系统</h3><p>Linux安装根文件系统可分为两部分</p>
+<ol>
+<li>内核安装特殊<strong>rootfs</strong>文件系统——该文件系统仅提供一个作为<strong>初始安装点</strong>的空目录</li>
+<li>内核在空目录上安装<strong>实际根文件系统</strong></li>
+</ol>
+<p>之所以麻烦的先安装<strong>rootfs</strong>文件系统，然后再安装<strong>实际根文件系统</strong>，是因为<strong>rootfs</strong>文件系统允许内核容易地更改其实际文件系统</p>
+<h4 id="init-mount-tree"><a href="#init-mount-tree" class="headerlink" title="init_mount_tree"></a>init_mount_tree</h4><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/fs/namespace.c#L4329">fs/namespace.c</a>的<code>static void __init init_mount_tree(void)</code>函数，来安装<strong>rootfs</strong>文件系统</p>
+<p>下面给出简化很多细节的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> __init <span class="title">init_mount_tree</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vfsmount</span> *<span class="title">mnt</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mount</span> *<span class="title">m</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mnt_namespace</span> *<span class="title">ns</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">path</span> <span class="title">root</span>;</span></span><br><span class="line"></span><br><span class="line">	mnt = vfs_kern_mount(&amp;rootfs_fs_type, <span class="number">0</span>, <span class="string">&quot;rootfs&quot;</span>, <span class="literal">NULL</span>);</span><br><span class="line">	ns = alloc_mnt_ns(&amp;init_user_ns, <span class="literal">false</span>);</span><br><span class="line"></span><br><span class="line">	root.mnt = mnt;</span><br><span class="line">	root.dentry = mnt-&gt;mnt_root;</span><br><span class="line"></span><br><span class="line">	set_fs_pwd(current-&gt;fs, &amp;root);</span><br><span class="line">	set_fs_root(current-&gt;fs, &amp;root);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是首先注册特殊文件类型<strong>rootfs</strong>，然后初始化<strong>进程0</strong>(当前进程)的<strong>根目录</strong>和<strong>当前工作目录</strong></p>
+<h4 id="prepare-namespace"><a href="#prepare-namespace" class="headerlink" title="prepare_namespace"></a>prepare_namespace</h4><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/init/do_mounts.c#L601">init/do_mounts.c</a>的<code>void __init prepare_namespace(void)</code>函数，来安装实际的根文件系统</p>
+<p>下面给出简化很多细节的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> __init <span class="title">prepare_namespace</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">if</span> (saved_root_name[<span class="number">0</span>]) &#123;</span><br><span class="line">		root_device_name = saved_root_name;</span><br><span class="line">		<span class="keyword">if</span> (!<span class="built_in">strncmp</span>(root_device_name, <span class="string">&quot;mtd&quot;</span>, <span class="number">3</span>) ||</span><br><span class="line">		    !<span class="built_in">strncmp</span>(root_device_name, <span class="string">&quot;ubi&quot;</span>, <span class="number">3</span>)) &#123;</span><br><span class="line">			mount_block_root(root_device_name, root_mountflags);</span><br><span class="line">			<span class="keyword">goto</span> out;</span><br><span class="line">		&#125;</span><br><span class="line">		ROOT_DEV = <span class="keyword">name_to_dev_t</span>(root_device_name);</span><br><span class="line">		<span class="keyword">if</span> (<span class="built_in">strncmp</span>(root_device_name, <span class="string">&quot;/dev/&quot;</span>, <span class="number">5</span>) == <span class="number">0</span>)</span><br><span class="line">			root_device_name += <span class="number">5</span>;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (initrd_load())</span><br><span class="line">		<span class="keyword">goto</span> out;</span><br><span class="line"></span><br><span class="line">	mount_root();</span><br><span class="line"></span><br><span class="line">out:</span><br><span class="line">	devtmpfs_mount();</span><br><span class="line">	init_mount(<span class="string">&quot;.&quot;</span>, <span class="string">&quot;/&quot;</span>, <span class="literal">NULL</span>, MS_MOVE, <span class="literal">NULL</span>);</span><br><span class="line">	init_chroot(<span class="string">&quot;.&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是根据<strong>内核启动参数</strong>的<strong>root</strong>字段，初始化实际的根文件系统并安装，最后更改根路径即可</p>
+<h2 id="文件系统卸载"><a href="#文件系统卸载" class="headerlink" title="文件系统卸载"></a>文件系统卸载</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/fs/namespace.c#L1797">fs/namespace.c</a>的<code>static int ksys_umount(char __user *name, int flags)</code>函数，来卸载安装的文件系统</p>
+<p>下面给出简化很多细节的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">ksys_umount</span><span class="params">(<span class="keyword">char</span> __user *name, <span class="keyword">int</span> flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">int</span> ret;</span><br><span class="line">	user_path_at(AT_FDCWD, name, lookup_flags, &amp;path);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">path_umount</span><span class="params">(struct path *path, <span class="keyword">int</span> flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mount</span> *<span class="title">mnt</span> =</span> real_mount(path-&gt;mnt);</span><br><span class="line">	ret = do_umount(mnt, flags);</span><br><span class="line">	<span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">do_umount</span><span class="params">(struct mount *mnt, <span class="keyword">int</span> flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">super_block</span> *<span class="title">sb</span> =</span> mnt-&gt;mnt.mnt_sb;</span><br><span class="line">	<span class="keyword">if</span> (&amp;mnt-&gt;mnt == current-&gt;fs-&gt;root.mnt &amp;&amp; !(flags &amp; MNT_DETACH)) &#123;</span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * Special case for &quot;unmounting&quot; root ...</span></span><br><span class="line"><span class="comment">		 * we just try to remount it readonly.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		<span class="keyword">return</span> do_umount_root(sb);</span><br><span class="line">	&#125;</span><br><span class="line">	umount_tree(mnt, ...);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>基本思路就是查找到相关的<strong>dentry</strong>，进而获取<strong>mount</strong>相关结构体，读取到对应的<strong>超级块</strong>对象。有了这些结构后，则可以方便的卸载文件系统，即释放相关的<strong>mount</strong>相关结构体</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.gitee.io/2022/03/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%9B%9B/">https://jiaweihawk.gitee.io/2022/03/14/linux内核学习-四/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.gitee.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2022/03/07/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%B8%89/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">linux内核学习-三</div></div></a></div><div class="next-post pull-right"><a href="/2022/04/01/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%BA%94/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">linux内核学习-五</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2022/04/26/linux内核学习-七/" title="linux内核学习-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-26</div><div class="title">linux内核学习-七</div></div></a></div><div><a href="/2022/03/07/linux内核学习-三/" title="linux内核学习-三"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-03-07</div><div class="title">linux内核学习-三</div></div></a></div><div><a href="/2022/05/11/linux内核学习-九/" title="linux内核学习-九"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-11</div><div class="title">linux内核学习-九</div></div></a></div><div><a href="/2022/02/27/linux内核学习-二/" title="linux内核学习-二"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-02-27</div><div class="title">linux内核学习-二</div></div></a></div><div><a href="/2022/04/01/linux内核学习-五/" title="linux内核学习-五"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-01</div><div class="title">linux内核学习-五</div></div></a></div><div><a href="/2022/04/28/linux内核学习-八/" title="linux内核学习-八"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-28</div><div class="title">linux内核学习-八</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F"><span class="toc-number">2.</span> <span class="toc-text">虚拟文件系统</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E9%80%9A%E7%94%A8%E6%96%87%E4%BB%B6%E6%A8%A1%E5%9E%8B"><span class="toc-number">3.</span> <span class="toc-text">通用文件模型</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-super-block"><span class="toc-number">3.1.</span> <span class="toc-text">struct super_block</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-inode"><span class="toc-number">3.2.</span> <span class="toc-text">struct inode</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-file"><span class="toc-number">3.3.</span> <span class="toc-text">struct file</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-dentry"><span class="toc-number">3.4.</span> <span class="toc-text">struct dentry</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%B8%8E%E8%BF%9B%E7%A8%8B%E7%9B%B8%E5%85%B3%E7%9A%84%E6%96%87%E4%BB%B6"><span class="toc-number">4.</span> <span class="toc-text">与进程相关的文件</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-fs-struct"><span class="toc-number">4.1.</span> <span class="toc-text">struct fs_struct</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-files-struct"><span class="toc-number">4.2.</span> <span class="toc-text">struct files_struct</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%A4%84%E7%90%86"><span class="toc-number">5.</span> <span class="toc-text">文件系统处理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-file-system-type"><span class="toc-number">5.1.</span> <span class="toc-text">struct file_system_type</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%AE%89%E8%A3%85"><span class="toc-number">5.2.</span> <span class="toc-text">文件系统安装</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B4%E4%BD%93%E6%A1%86%E6%9E%B6"><span class="toc-number">5.2.1.</span> <span class="toc-text">整体框架</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#struct-vfsmount"><span class="toc-number">5.2.2.</span> <span class="toc-text">struct vfsmount</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E8%A3%85%E6%99%AE%E9%80%9A%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F"><span class="toc-number">5.2.3.</span> <span class="toc-text">安装普通文件系统</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E8%A3%85%E6%A0%B9%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F"><span class="toc-number">5.2.4.</span> <span class="toc-text">安装根文件系统</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#init-mount-tree"><span class="toc-number">5.2.4.1.</span> <span class="toc-text">init_mount_tree</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#prepare-namespace"><span class="toc-number">5.2.4.2.</span> <span class="toc-text">prepare_namespace</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%8D%B8%E8%BD%BD"><span class="toc-number">5.3.</span> <span class="toc-text">文件系统卸载</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/26/xv6-%E4%B8%89/" title="xv6-三">xv6-三</a><time datetime="2022-05-26T01:46:10.000Z" title="发表于 2022-05-26 09:46:10">2022-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/21/xv6-%E4%BA%8C/" title="xv6-二">xv6-二</a><time datetime="2022-05-21T14:24:40.000Z" title="发表于 2022-05-21 22:24:40">2022-05-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/19/xv6/" title="xv6">xv6</a><time datetime="2022-05-19T12:05:10.000Z" title="发表于 2022-05-19 20:05:10">2022-05-19</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
+  window.MathJax = {
+    loader: {
+      source: {
+        '[tex]/amsCd': '[tex]/amscd'
+      }
+    },
+    tex: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"]],
+      tags: 'ams'
+    },
+    options: {
+      renderActions: {
+        findScript: [10, doc => {
+          for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+            const display = !!node.type.match(/; *mode=display/)
+            const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+            const text = document.createTextNode('')
+            node.parentNode.replaceChild(text, node)
+            math.start = {node: text, delim: '', n: 0}
+            math.end = {node: text, delim: '', n: 0}
+            doc.math.push(math)
+          }
+        }, ''],
+        addClass: [200,() => {
+          document.querySelectorAll('mjx-container:not([display=\'true\']').forEach( node => {
+            const target = node.parentNode
+            if (!target.classList.contains('has-jax')) {
+              target.classList.add('mathjax-overflow')
+            }
+          })
+        }, '', false]
+      }
+    }
+  }
+  
+  const script = document.createElement('script')
+  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+  script.id = 'MathJax-script'
+  script.async = true
+  document.head.appendChild(script)
+} else {
+  MathJax.startup.document.state(0)
+  MathJax.texReset()
+  MathJax.typeset()
+}</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

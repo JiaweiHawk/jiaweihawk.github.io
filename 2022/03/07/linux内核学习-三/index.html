@@ -1,0 +1,473 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><title>linux内核学习-三 | H4wk1ns's blog</title><meta name="keywords" content="linux,内核"><meta name="author" content="H4wk1ns"><meta name="copyright" content="H4wk1ns"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="前言前面博客分析了Linux内核对于物理内存的管理机制，下面介绍一下Linux内核对于进程地址空间的管理机制 实际上，进程地址空间，也就是进程的虚拟地址空间 进程的地址空间进程的地址空间(address space)，是由允许进程使用的全部线性地址组成的。 也就是说，内核通过管理所谓的线性区的资源，从而表示一个进程的线性地址区间，进而管理进程的地址空间 struct mm_struct进程通过位于">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux内核学习-三">
+<meta property="og:url" content="https://jiaweihawk.gitee.io/2022/03/07/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%B8%89/index.html">
+<meta property="og:site_name" content="H4wk1ns&#39;s blog">
+<meta property="og:description" content="前言前面博客分析了Linux内核对于物理内存的管理机制，下面介绍一下Linux内核对于进程地址空间的管理机制 实际上，进程地址空间，也就是进程的虚拟地址空间 进程的地址空间进程的地址空间(address space)，是由允许进程使用的全部线性地址组成的。 也就是说，内核通过管理所谓的线性区的资源，从而表示一个进程的线性地址区间，进而管理进程的地址空间 struct mm_struct进程通过位于">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://jiaweihawk.gitee.io/img/background.jpg">
+<meta property="article:published_time" content="2022-03-07T00:40:55.000Z">
+<meta property="article:modified_time" content="2022-06-05T11:17:57.170Z">
+<meta property="article:author" content="H4wk1ns">
+<meta property="article:tag" content="linux">
+<meta property="article:tag" content="内核">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://jiaweihawk.gitee.io/img/background.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.gitee.io/2022/03/07/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%B8%89/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容：${query}"}},
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    jQuery: 'https://cdn.jsdelivr.net/npm/jquery@latest/dist/jquery.min.js',
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/js/jquery.justifiedGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/css/justifiedGallery.min.css'
+    },
+    fancybox: {
+      js: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.css'
+    }
+  },
+  isPhotoFigcaption: true,
+  islazyload: false,
+  isanchor: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'linux内核学习-三',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2022-06-05 19:17:57'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+    const fontSizeVal = saveToLocal.get('global-font-size')
+    if (fontSizeVal !== undefined) {
+      document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
+    }
+    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">linux内核学习-三</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-03-07T00:40:55.000Z" title="发表于 2022-03-07 08:40:55">2022-03-07</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-06-05T11:17:57.170Z" title="更新于 2022-06-05 19:17:57">2022-06-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">4.2k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>18分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="linux内核学习-三"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>前面博客分析了Linux内核对于物理内存的管理机制，下面介绍一下Linux内核对于<strong>进程地址空间</strong>的管理机制</p>
+<p>实际上，<strong>进程地址空间</strong>，也就是进程的虚拟地址空间</p>
+<h1 id="进程的地址空间"><a href="#进程的地址空间" class="headerlink" title="进程的地址空间"></a>进程的地址空间</h1><p>进程的<strong>地址空间</strong>(address space)，是由允许进程使用的全部线性地址组成的。</p>
+<p>也就是说，内核通过管理所谓的<strong>线性区</strong>的资源，从而表示一个进程的线性地址区间，进而管理进程的<strong>地址空间</strong></p>
+<h1 id="struct-mm-struct"><a href="#struct-mm-struct" class="headerlink" title="struct mm_struct"></a>struct mm_struct</h1><p>进程通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/mm_types.h#L458">include/linux/mm_types.h</a>的进程内存描述符，管理进程中与进程地址空间有关的全部信息。其相关的重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct vm_area_struct *</td>
+<td style="text-align:center">mmap</td>
+<td style="text-align:center">指向线性区对象的链表头</td>
+</tr>
+<tr>
+<td style="text-align:center">struct rb_root</td>
+<td style="text-align:center">mm_rb</td>
+<td style="text-align:center">指向线性区对象的<strong>红-黑树</strong>的根</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long (<em>)(struct file </em>filp, unsigned long addr, unsigned long len, unsigned long pgoff, unsigned long flags)</td>
+<td style="text-align:center">get_ummaped_area</td>
+<td style="text-align:center">在进程地址空间中搜索有效线性地址区间的成员函数</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">mmap_base</td>
+<td style="text-align:center">第一个分配的匿名线性区或文件内存映射的线性地址</td>
+</tr>
+<tr>
+<td style="text-align:center">pgd_t *</td>
+<td style="text-align:center">pgd</td>
+<td style="text-align:center">页全局目录</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">mm_users</td>
+<td style="text-align:center">次使用计数器，即共享该内存描述符的轻量级进程个数</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">mm_count</td>
+<td style="text-align:center">主使用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">map_count</td>
+<td style="text-align:center">线性区的个数</td>
+</tr>
+<tr>
+<td style="text-align:center">spinlock_t</td>
+<td style="text-align:center">page_table_lock</td>
+<td style="text-align:center">线性区页表的自旋锁</td>
+</tr>
+<tr>
+<td style="text-align:center">struct rw_semaphore</td>
+<td style="text-align:center">mmap_lock</td>
+<td style="text-align:center">线性区的<strong>读/写</strong>信号量</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">mmlist</td>
+<td style="text-align:center">指向内存描述符链表中的相邻元素</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">start_code</td>
+<td style="text-align:center">可执行代码的起始地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">end_code</td>
+<td style="text-align:center">可执行代码的终止地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">start_data</td>
+<td style="text-align:center">已初始化数据的起始地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">end_data</td>
+<td style="text-align:center">已初始化数据的终止地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">start_brk</td>
+<td style="text-align:center">堆的起始地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">brk</td>
+<td style="text-align:center">堆的终止地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">start_stack</td>
+<td style="text-align:center">用户态栈的起始地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">arg_start</td>
+<td style="text-align:center">命令行参数的起始地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">arg_end</td>
+<td style="text-align:center">命令行参数的终止地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">env_start</td>
+<td style="text-align:center">环境变量的起始地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">env_end</td>
+<td style="text-align:center">环境变量的终止地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">total_vm</td>
+<td style="text-align:center">进程地址空间的总页数</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long[]</td>
+<td style="text-align:center">saved_auxv</td>
+<td style="text-align:center">执行ELF程序所需的辅助信息</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h1 id="struct-vm-area-struct"><a href="#struct-vm-area-struct" class="headerlink" title="struct vm_area_struct"></a>struct vm_area_struct</h1><p>内存描述符所描述的线性区，就是通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/mm_types.h#L375">include/linux/mm_types.h</a>的结构体进行管理的。下面介绍一下其重要的字段</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">成员名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">vm_start</td>
+<td style="text-align:center">该线性区的起始线性地址</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">vm_end</td>
+<td style="text-align:center">该线性区的终止线性地址</td>
+</tr>
+<tr>
+<td style="text-align:center">struct mm_struct *</td>
+<td style="text-align:center">vm_mm</td>
+<td style="text-align:center">该线性区所在的进程内存描述符</td>
+</tr>
+<tr>
+<td style="text-align:center">struct vm_area_struct*</td>
+<td style="text-align:center">vm_next</td>
+<td style="text-align:center">进程内存描述符中线性区对象链表的下一个线性区</td>
+</tr>
+<tr>
+<td style="text-align:center">struct vm_area_struct*</td>
+<td style="text-align:center">vm_prev</td>
+<td style="text-align:center">进程内存描述符中线性区对象链表的上一个线性区</td>
+</tr>
+<tr>
+<td style="text-align:center">struct rb_node</td>
+<td style="text-align:center">vm_rb</td>
+<td style="text-align:center">用于进程内存描述符的线性区对象的红黑树数据结构</td>
+</tr>
+<tr>
+<td style="text-align:center">pgprot_t</td>
+<td style="text-align:center">vm_page_prot</td>
+<td style="text-align:center">该线性区的访问许可权</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">vm_flags</td>
+<td style="text-align:center">该线性区的标志</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct vm_operations_struct *</td>
+<td style="text-align:center">vm_ops</td>
+<td style="text-align:center">该线性区所执行的成员函数</td>
+</tr>
+<tr>
+<td style="text-align:center">struct file *</td>
+<td style="text-align:center">vm_file</td>
+<td style="text-align:center">该线性区可能的映射文件的文件对象</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">vm_pgoff</td>
+<td style="text-align:center">该线性区可能的映射文件的偏移量</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>需要说明的是，进程内存描述符中的不同线性区不会折叠——为此，Linux内核在向进程内存描述符中添加新的线性地址区间时，会涉及到已有的线性地址空间的调整，如下图所示。</p>
+<p><img src="调整线性地址区间.png" alt="调整线性地址区间"></p>
+<h2 id="线性区数据结构"><a href="#线性区数据结构" class="headerlink" title="线性区数据结构"></a>线性区数据结构</h2><p>进程所拥有的所有线性区，是通过链表结构，按照线性区的线性地址进行升序管理的。如下图所示<br><img src="线性区数据结构.png" alt="线性区数据结构"></p>
+<p>当然，为了提高效率，Linux添加了<strong>红-黑树</strong>结构——其和上述的链表结构指向同一个线性区描述符。<br>可以通过<strong>红-黑树</strong>结构快速找到线性区的前、后元素，并通过搜索结果快速更新链表</p>
+<h2 id="线性区访问权限"><a href="#线性区访问权限" class="headerlink" title="线性区访问权限"></a>线性区访问权限</h2><p>实际上，关于页的标志，目前已经提到了两种</p>
+<ol>
+<li><strong>分页机制</strong>中，每个<strong>页表项</strong>中包含着诸如<strong>Read/Write</strong>、<strong>Present</strong>或<strong>User/Supervisor</strong>等</li>
+<li><strong>页描述符</strong>中，其<strong>flags</strong>字段中包含着诸如<strong>PG_locked</strong>等</li>
+</ol>
+<p>而这里介绍第三种——线性区的<strong>vm_page_prot</strong>或<strong>vm_flags</strong>字段，包含着描述该线性区全部页的相关信息，部分重要内容如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">标志名</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">VM_READ</td>
+<td style="text-align:center">该线性区中所有页是可读的</td>
+</tr>
+<tr>
+<td style="text-align:center">VM_WRITE</td>
+<td style="text-align:center">该线性区中所有页是可写的</td>
+</tr>
+<tr>
+<td style="text-align:center">VM_EXEC</td>
+<td style="text-align:center">该线性区中所有页是可执行的</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>实际上可以看到，<strong>线性区</strong>的访问权限和<strong>页表</strong>标志的关系比较紧密——例如其都有<strong>Read</strong>、<strong>Write</strong>相关的属性信息。总而言之，<strong>线性区</strong>的访问权限和<strong>页表</strong>的标志，共同提供了用户态二进制程序的相关段权限机制。</p>
+<h1 id="线性区的操作"><a href="#线性区的操作" class="headerlink" title="线性区的操作"></a>线性区的操作</h1><p>下面介绍一些线性区描述符的常用处理函数</p>
+<h2 id="find-vma"><a href="#find-vma" class="headerlink" title="find_vma"></a>find_vma</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/mm/mmap.c#L2279">mm/mmap.c</a>的<code>struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)</code>函数，在进程内存描述符<strong>mm</strong>中，查找线性区的<strong>vm_end</strong>大于<strong>addr</strong>线性地址的第一个线性区的位置。</p>
+<p>下面给出简化很多细节的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">struct vm_area_struct *<span class="title">find_vma</span><span class="params">(struct mm_struct *mm, <span class="keyword">unsigned</span> <span class="keyword">long</span> addr)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">rb_node</span> *<span class="title">rb_node</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">vma</span>;</span></span><br><span class="line"></span><br><span class="line">	mmap_assert_locked(mm);</span><br><span class="line">	rb_node = mm-&gt;mm_rb.rb_node;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">while</span> (rb_node) &#123;</span><br><span class="line">		<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">tmp</span>;</span></span><br><span class="line"></span><br><span class="line">		tmp = rb_entry(rb_node, struct vm_area_struct, vm_rb);</span><br><span class="line"></span><br><span class="line">		<span class="keyword">if</span> (tmp-&gt;vm_end &gt; addr) &#123;</span><br><span class="line">			vma = tmp;</span><br><span class="line">			<span class="keyword">if</span> (tmp-&gt;vm_start &lt;= addr)</span><br><span class="line">				<span class="keyword">break</span>;</span><br><span class="line">			rb_node = rb_node-&gt;rb_left;</span><br><span class="line">		&#125; <span class="keyword">else</span></span><br><span class="line">			rb_node = rb_node-&gt;rb_right;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> vma;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是通过<strong>进程内存描述符</strong>的<strong>红-黑树</strong>结构的相关操作，从而快速筛选符合条件的结果</p>
+<h2 id="find-vma-intersection"><a href="#find-vma-intersection" class="headerlink" title="find_vma_intersection"></a>find_vma_intersection</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/mm.h#L2768">include/linux/mm.h</a>的<code>static inline struct vm_area_struct *find_vma_intersection(struct mm_struct *mm, unsigned long start_addr, unsigned long end_addr)</code>函数，在进程内存描述符<strong>mm</strong>中，查找与给定范围的线性区相重叠的第一个线性区位置</p>
+<p>其逻辑如下所示，还是比较简单的</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span></span></span><br><span class="line"><span class="function">struct vm_area_struct *<span class="title">find_vma_intersection</span><span class="params">(struct mm_struct *mm,</span></span></span><br><span class="line"><span class="params"><span class="function">					     <span class="keyword">unsigned</span> <span class="keyword">long</span> start_addr,</span></span></span><br><span class="line"><span class="params"><span class="function">					     <span class="keyword">unsigned</span> <span class="keyword">long</span> end_addr)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">vma</span> =</span> find_vma(mm, start_addr);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (vma &amp;&amp; end_addr &lt;= vma-&gt;vm_start)</span><br><span class="line">		vma = <span class="literal">NULL</span>;</span><br><span class="line">	<span class="keyword">return</span> vma;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其基本思路就是获取当前线性区(线性区起始地址)之后的第一个线性区，然后判断这两个线性区是否相交即可</p>
+<h2 id="get-unmapped-area"><a href="#get-unmapped-area" class="headerlink" title="get_unmapped_area"></a>get_unmapped_area</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/mm/mmap.c#L2235">mm/mmap.c</a>的<code>unsigned long get_unmapped_area(struct file *file, unsigned long addr, unsigned long len, unsigned long pgoff, unsigned long flags)</code>函数，在进程内存描述符<strong>mm</strong>中，找到一个可以分配的，长度为<strong>len</strong>的线性地址区间</p>
+<p>下面给出化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">long</span></span></span><br><span class="line"><span class="function"><span class="title">get_unmapped_area</span><span class="params">(struct file *file, <span class="keyword">unsigned</span> <span class="keyword">long</span> addr, <span class="keyword">unsigned</span> <span class="keyword">long</span> len,</span></span></span><br><span class="line"><span class="params"><span class="function">		<span class="keyword">unsigned</span> <span class="keyword">long</span> pgoff, <span class="keyword">unsigned</span> <span class="keyword">long</span> flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">unsigned</span> <span class="title">long</span> <span class="params">(*get_area)</span><span class="params">(struct file *, <span class="keyword">unsigned</span> <span class="keyword">long</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">					  <span class="keyword">unsigned</span> <span class="keyword">long</span>, <span class="keyword">unsigned</span> <span class="keyword">long</span>, <span class="keyword">unsigned</span> <span class="keyword">long</span>)</span></span>;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * arch_get_unmapped_area 或 arch_get_unmapped_area_topdown   </span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	get_area = current-&gt;mm-&gt;get_unmapped_area;</span><br><span class="line"></span><br><span class="line">	addr = get_area(file, addr, len, pgoff, flags);</span><br><span class="line">	error = security_mmap_addr(addr);</span><br><span class="line">	<span class="keyword">return</span> error ? error : addr;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">long</span></span></span><br><span class="line"><span class="function"><span class="title">arch_get_unmapped_area</span><span class="params">(struct file *filp, <span class="keyword">unsigned</span> <span class="keyword">long</span> addr,</span></span></span><br><span class="line"><span class="params"><span class="function">		<span class="keyword">unsigned</span> <span class="keyword">long</span> len, <span class="keyword">unsigned</span> <span class="keyword">long</span> pgoff, <span class="keyword">unsigned</span> <span class="keyword">long</span> flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mm_struct</span> *<span class="title">mm</span> =</span> current-&gt;mm;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">vma</span>, *<span class="title">prev</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_unmapped_area_info</span> <span class="title">info</span>;</span></span><br><span class="line">	<span class="keyword">const</span> <span class="keyword">unsigned</span> <span class="keyword">long</span> mmap_end = arch_get_mmap_end(addr);</span><br><span class="line"></span><br><span class="line">	info.flags = <span class="number">0</span>;</span><br><span class="line">	info.length = len;</span><br><span class="line">	info.low_limit = mm-&gt;mmap_base;</span><br><span class="line">	info.high_limit = mmap_end;</span><br><span class="line">	info.align_mask = <span class="number">0</span>;</span><br><span class="line">	info.align_offset = <span class="number">0</span>;</span><br><span class="line">	<span class="keyword">return</span> vm_unmapped_area(&amp;info);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">long</span></span></span><br><span class="line"><span class="function"><span class="title">arch_get_unmapped_area_topdown</span><span class="params">(struct file *filp, <span class="keyword">unsigned</span> <span class="keyword">long</span> addr,</span></span></span><br><span class="line"><span class="params"><span class="function">			  <span class="keyword">unsigned</span> <span class="keyword">long</span> len, <span class="keyword">unsigned</span> <span class="keyword">long</span> pgoff,</span></span></span><br><span class="line"><span class="params"><span class="function">			  <span class="keyword">unsigned</span> <span class="keyword">long</span> flags)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">vma</span>, *<span class="title">prev</span>;</span></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mm_struct</span> *<span class="title">mm</span> =</span> current-&gt;mm;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_unmapped_area_info</span> <span class="title">info</span>;</span></span><br><span class="line">	<span class="keyword">const</span> <span class="keyword">unsigned</span> <span class="keyword">long</span> mmap_end = arch_get_mmap_end(addr);</span><br><span class="line"></span><br><span class="line">	info.flags = VM_UNMAPPED_AREA_TOPDOWN;</span><br><span class="line">	info.length = len;</span><br><span class="line">	info.low_limit = max(PAGE_SIZE, mmap_min_addr);</span><br><span class="line">	info.high_limit = arch_get_mmap_base(addr, mm-&gt;mmap_base);</span><br><span class="line">	info.align_mask = <span class="number">0</span>;</span><br><span class="line">	info.align_offset = <span class="number">0</span>;</span><br><span class="line">	addr = vm_unmapped_area(&amp;info);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> addr;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="title">vm_unmapped_area</span><span class="params">(struct vm_unmapped_area_info *info)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> addr;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (info-&gt;flags &amp; VM_UNMAPPED_AREA_TOPDOWN)</span><br><span class="line">		addr = unmapped_area_topdown(info);</span><br><span class="line">	<span class="keyword">else</span></span><br><span class="line">		addr = unmapped_area(info);</span><br><span class="line"></span><br><span class="line">	trace_vm_unmapped_area(addr, info);</span><br><span class="line">	<span class="keyword">return</span> addr;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="title">unmapped_area</span><span class="params">(struct vm_unmapped_area_info *info)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * We implement the search by looking for an rbtree node that</span></span><br><span class="line"><span class="comment">	 * immediately follows a suitable gap. That is,</span></span><br><span class="line"><span class="comment">	 * - gap_start = vma-&gt;vm_prev-&gt;vm_end &lt;= info-&gt;high_limit - length;</span></span><br><span class="line"><span class="comment">	 * - gap_end   = vma-&gt;vm_start        &gt;= info-&gt;low_limit  + length;</span></span><br><span class="line"><span class="comment">	 * - gap_end - gap_start &gt;= length</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line"></span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mm_struct</span> *<span class="title">mm</span> =</span> current-&gt;mm;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">vma</span>;</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> length, low_limit, high_limit, gap_start, gap_end;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Adjust search length to account for worst case alignment overhead */</span></span><br><span class="line">	length = info-&gt;length + info-&gt;align_mask;</span><br><span class="line">	high_limit = info-&gt;high_limit - length;</span><br><span class="line">	low_limit = info-&gt;low_limit + length;</span><br><span class="line"></span><br><span class="line">	vma = rb_entry(mm-&gt;mm_rb.rb_node, struct vm_area_struct, vm_rb);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">		<span class="comment">/* Visit left subtree if it looks promising */</span></span><br><span class="line">		gap_end = vm_start_gap(vma);</span><br><span class="line">		<span class="keyword">if</span> (gap_end &gt;= low_limit &amp;&amp; vma-&gt;vm_rb.rb_left) &#123;</span><br><span class="line">			<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">left</span> =</span></span><br><span class="line">				rb_entry(vma-&gt;vm_rb.rb_left,</span><br><span class="line">					 struct vm_area_struct, vm_rb);</span><br><span class="line">			<span class="keyword">if</span> (left-&gt;rb_subtree_gap &gt;= length) &#123;</span><br><span class="line">				vma = left;</span><br><span class="line">				<span class="keyword">continue</span>;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		gap_start = vma-&gt;vm_prev ? vm_end_gap(vma-&gt;vm_prev) : <span class="number">0</span>;</span><br><span class="line">check_current:</span><br><span class="line">		<span class="comment">/* Check if current node has a suitable gap */</span></span><br><span class="line">		<span class="keyword">if</span> (gap_start &gt; high_limit)</span><br><span class="line">			<span class="keyword">return</span> -ENOMEM;</span><br><span class="line">		<span class="keyword">if</span> (gap_end &gt;= low_limit &amp;&amp;</span><br><span class="line">		    gap_end &gt; gap_start &amp;&amp; gap_end - gap_start &gt;= length)</span><br><span class="line">			<span class="keyword">goto</span> found;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/* Visit right subtree if it looks promising */</span></span><br><span class="line">		<span class="keyword">if</span> (vma-&gt;vm_rb.rb_right) &#123;</span><br><span class="line">			<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">right</span> =</span></span><br><span class="line">				rb_entry(vma-&gt;vm_rb.rb_right,</span><br><span class="line">					 struct vm_area_struct, vm_rb);</span><br><span class="line">			<span class="keyword">if</span> (right-&gt;rb_subtree_gap &gt;= length) &#123;</span><br><span class="line">				vma = right;</span><br><span class="line">				<span class="keyword">continue</span>;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/* Go back up the rbtree to find next candidate node */</span></span><br><span class="line">		<span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">			<span class="class"><span class="keyword">struct</span> <span class="title">rb_node</span> *<span class="title">prev</span> =</span> &amp;vma-&gt;vm_rb;</span><br><span class="line">			<span class="keyword">if</span> (!rb_parent(prev))</span><br><span class="line">				<span class="keyword">goto</span> check_highest;</span><br><span class="line">			vma = rb_entry(rb_parent(prev),</span><br><span class="line">				       struct vm_area_struct, vm_rb);</span><br><span class="line">			<span class="keyword">if</span> (prev == vma-&gt;vm_rb.rb_left) &#123;</span><br><span class="line">				gap_start = vm_end_gap(vma-&gt;vm_prev);</span><br><span class="line">				gap_end = vm_start_gap(vma);</span><br><span class="line">				<span class="keyword">goto</span> check_current;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">check_highest:</span><br><span class="line">	<span class="comment">/* Check highest gap, which does not precede any rbtree node */</span></span><br><span class="line">	gap_start = mm-&gt;highest_vm_end;</span><br><span class="line">	gap_end = ULONG_MAX;  <span class="comment">/* Only for VM_BUG_ON below */</span></span><br><span class="line">	<span class="keyword">if</span> (gap_start &gt; high_limit)</span><br><span class="line">		<span class="keyword">return</span> -ENOMEM;</span><br><span class="line"></span><br><span class="line">found:</span><br><span class="line">	<span class="comment">/* We found a suitable gap. Clip it with the original low_limit. */</span></span><br><span class="line">	<span class="keyword">if</span> (gap_start &lt; info-&gt;low_limit)</span><br><span class="line">		gap_start = info-&gt;low_limit;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Adjust gap address to the desired alignment */</span></span><br><span class="line">	gap_start += (info-&gt;align_offset - gap_start) &amp; info-&gt;align_mask;</span><br><span class="line"></span><br><span class="line">	VM_BUG_ON(gap_start + info-&gt;length &gt; info-&gt;high_limit);</span><br><span class="line">	VM_BUG_ON(gap_start + info-&gt;length &gt; gap_end);</span><br><span class="line">	<span class="keyword">return</span> gap_start;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="title">unmapped_area_topdown</span><span class="params">(struct vm_unmapped_area_info *info)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">mm_struct</span> *<span class="title">mm</span> =</span> current-&gt;mm;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">vma</span>;</span></span><br><span class="line">	<span class="keyword">unsigned</span> <span class="keyword">long</span> length, low_limit, high_limit, gap_start, gap_end;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Adjust search length to account for worst case alignment overhead */</span></span><br><span class="line">	length = info-&gt;length + info-&gt;align_mask;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Adjust search limits by the desired length.</span></span><br><span class="line"><span class="comment">	 * See implementation comment at top of unmapped_area().</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	gap_end = info-&gt;high_limit;</span><br><span class="line">	high_limit = gap_end - length;</span><br><span class="line">	low_limit = info-&gt;low_limit + length;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Check highest gap, which does not precede any rbtree node */</span></span><br><span class="line">	gap_start = mm-&gt;highest_vm_end;</span><br><span class="line">	<span class="keyword">if</span> (gap_start &lt;= high_limit)</span><br><span class="line">		<span class="keyword">goto</span> found_highest;</span><br><span class="line"></span><br><span class="line">	vma = rb_entry(mm-&gt;mm_rb.rb_node, struct vm_area_struct, vm_rb);</span><br><span class="line">	<span class="keyword">if</span> (vma-&gt;rb_subtree_gap &lt; length)</span><br><span class="line">		<span class="keyword">return</span> -ENOMEM;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">		<span class="comment">/* Visit right subtree if it looks promising */</span></span><br><span class="line">		gap_start = vma-&gt;vm_prev ? vm_end_gap(vma-&gt;vm_prev) : <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">if</span> (gap_start &lt;= high_limit &amp;&amp; vma-&gt;vm_rb.rb_right) &#123;</span><br><span class="line">			<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">right</span> =</span></span><br><span class="line">				rb_entry(vma-&gt;vm_rb.rb_right,</span><br><span class="line">					 struct vm_area_struct, vm_rb);</span><br><span class="line">			<span class="keyword">if</span> (right-&gt;rb_subtree_gap &gt;= length) &#123;</span><br><span class="line">				vma = right;</span><br><span class="line">				<span class="keyword">continue</span>;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">check_current:</span><br><span class="line">		<span class="comment">/* Check if current node has a suitable gap */</span></span><br><span class="line">		gap_end = vm_start_gap(vma);</span><br><span class="line">		<span class="keyword">if</span> (gap_end &lt; low_limit)</span><br><span class="line">			<span class="keyword">return</span> -ENOMEM;</span><br><span class="line">		<span class="keyword">if</span> (gap_start &lt;= high_limit &amp;&amp;</span><br><span class="line">		    gap_end &gt; gap_start &amp;&amp; gap_end - gap_start &gt;= length)</span><br><span class="line">			<span class="keyword">goto</span> found;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/* Visit left subtree if it looks promising */</span></span><br><span class="line">		<span class="keyword">if</span> (vma-&gt;vm_rb.rb_left) &#123;</span><br><span class="line">			<span class="class"><span class="keyword">struct</span> <span class="title">vm_area_struct</span> *<span class="title">left</span> =</span></span><br><span class="line">				rb_entry(vma-&gt;vm_rb.rb_left,</span><br><span class="line">					 struct vm_area_struct, vm_rb);</span><br><span class="line">			<span class="keyword">if</span> (left-&gt;rb_subtree_gap &gt;= length) &#123;</span><br><span class="line">				vma = left;</span><br><span class="line">				<span class="keyword">continue</span>;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="comment">/* Go back up the rbtree to find next candidate node */</span></span><br><span class="line">		<span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">			<span class="class"><span class="keyword">struct</span> <span class="title">rb_node</span> *<span class="title">prev</span> =</span> &amp;vma-&gt;vm_rb;</span><br><span class="line">			<span class="keyword">if</span> (!rb_parent(prev))</span><br><span class="line">				<span class="keyword">return</span> -ENOMEM;</span><br><span class="line">			vma = rb_entry(rb_parent(prev),</span><br><span class="line">				       struct vm_area_struct, vm_rb);</span><br><span class="line">			<span class="keyword">if</span> (prev == vma-&gt;vm_rb.rb_right) &#123;</span><br><span class="line">				gap_start = vma-&gt;vm_prev ?</span><br><span class="line">					vm_end_gap(vma-&gt;vm_prev) : <span class="number">0</span>;</span><br><span class="line">				<span class="keyword">goto</span> check_current;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">found:</span><br><span class="line">	<span class="comment">/* We found a suitable gap. Clip it with the original high_limit. */</span></span><br><span class="line">	<span class="keyword">if</span> (gap_end &gt; info-&gt;high_limit)</span><br><span class="line">		gap_end = info-&gt;high_limit;</span><br><span class="line"></span><br><span class="line">found_highest:</span><br><span class="line">	<span class="comment">/* Compute highest gap address at the desired alignment */</span></span><br><span class="line">	gap_end -= info-&gt;length;</span><br><span class="line">	gap_end -= (gap_end - info-&gt;align_offset) &amp; info-&gt;align_mask;</span><br><span class="line"></span><br><span class="line">	VM_BUG_ON(gap_end &lt; info-&gt;low_limit);</span><br><span class="line">	VM_BUG_ON(gap_end &lt; gap_start);</span><br><span class="line">	<span class="keyword">return</span> gap_end;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是传入的方向，遍历线性地址的红黑树结构，并查找线性区之间合适的空间，从而返回该空间即可</p>
+<h2 id="do-mmap"><a href="#do-mmap" class="headerlink" title="do_mmap"></a>do_mmap</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/mm/mmap.c#L1411">mm/mmap.c</a>的<code>unsigned long do_mmap(struct file *file, unsigned long addr, unsigned long len, unsigned long prot, unsigned long flags, unsigned long pgoff, unsigned long *populate, struct list_head *uf)</code>函数，从而从<strong>addr</strong>地址处开始，查找并插入一段长度为<strong>len</strong>的线性区</p>
+<p>下面给出化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="title">do_mmap</span><span class="params">(struct file *file, <span class="keyword">unsigned</span> <span class="keyword">long</span> addr,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">unsigned</span> <span class="keyword">long</span> len, <span class="keyword">unsigned</span> <span class="keyword">long</span> prot,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">unsigned</span> <span class="keyword">long</span> flags, <span class="keyword">unsigned</span> <span class="keyword">long</span> pgoff,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">unsigned</span> <span class="keyword">long</span> *populate, struct list_head *uf)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	addr = get_unmapped_area(file, addr, len, pgoff, flags);</span><br><span class="line"></span><br><span class="line">	addr = mmap_region(file, addr, len, vm_flags, pgoff, uf);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> addr;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="title">mmap_region</span><span class="params">(struct file *file, <span class="keyword">unsigned</span> <span class="keyword">long</span> addr,</span></span></span><br><span class="line"><span class="params"><span class="function">		<span class="keyword">unsigned</span> <span class="keyword">long</span> len, <span class="keyword">vm_flags_t</span> vm_flags, <span class="keyword">unsigned</span> <span class="keyword">long</span> pgoff,</span></span></span><br><span class="line"><span class="params"><span class="function">		struct list_head *uf)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Can we just expand an old mapping?</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,</span><br><span class="line">				<span class="literal">NULL</span>, file, pgoff, <span class="literal">NULL</span>, NULL_VM_UFFD_CTX);</span><br><span class="line">	<span class="keyword">if</span>(vma) &#123; <span class="keyword">return</span> vma; &#125;</span><br><span class="line"></span><br><span class="line">	vma = vm_area_alloc(mm);</span><br><span class="line">	vma-&gt;vm_start = addr;</span><br><span class="line">	vma-&gt;vm_end = addr + len;</span><br><span class="line">	vma-&gt;vm_flags = vm_flags;</span><br><span class="line">	vma-&gt;vm_page_prot = vm_get_page_prot(vm_flags);</span><br><span class="line">	vma-&gt;vm_pgoff = pgoff;</span><br><span class="line">	vma_link(mm, vma, prev, rb_link, rb_parent);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> vma;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是调用<strong>get_unmapped_area</strong>找到符合条件的线性区后，更新进程内存描述符的相关字段即可</p>
+<h2 id="do-munmap"><a href="#do-munmap" class="headerlink" title="do_munmap"></a>do_munmap</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/mm/mmap.c#L2898">mm/mmap.c</a>的<code>int do_munmap(struct mm_struct *mm, unsigned long start, size_t len, struct list_head *uf)</code>函数，删除进程内存描述符<strong>mm</strong>的给定线性区间<script type="math/tex">[start, start + len)</script></p>
+<p>这里需要特别说明一下，给定的线性区间<script type="math/tex">[start, start + len)</script>可能跨越进程内存描述符的多个线性区，因此需要小心处理</p>
+<p>下面给出化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">do_munmap</span><span class="params">(struct mm_struct *mm, <span class="keyword">unsigned</span> <span class="keyword">long</span> start, <span class="keyword">size_t</span> len,</span></span></span><br><span class="line"><span class="params"><span class="function">	      struct list_head *uf)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">return</span> __do_munmap(mm, start, len, uf, <span class="literal">false</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">int</span> __do_munmap(struct mm_struct *mm, <span class="keyword">unsigned</span> <span class="keyword">long</span> start, <span class="keyword">size_t</span> len,</span><br><span class="line">		struct list_head *uf, <span class="keyword">bool</span> downgrade)</span><br><span class="line">&#123;</span><br><span class="line">	vma = find_vma_intersection(mm, start, end);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (start &gt; vma-&gt;vm_start) &#123;</span><br><span class="line">		error = __split_vma(mm, vma, start, <span class="number">0</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	last = find_vma(mm, end);</span><br><span class="line">	<span class="keyword">if</span> (last &amp;&amp; end &gt; last-&gt;vm_start) &#123;</span><br><span class="line">		<span class="keyword">int</span> error = __split_vma(mm, last, end, <span class="number">1</span>);</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (!detach_vmas_to_be_unmapped(mm, vma, prev, end))</span><br><span class="line">		downgrade = <span class="literal">false</span>;</span><br><span class="line"></span><br><span class="line">	unmap_region(mm, vma, prev, start, end);</span><br><span class="line"></span><br><span class="line">	<span class="comment">/* Fix up all other VM information */</span></span><br><span class="line">	remove_vma_list(mm, vma);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是找到所有的与<script type="math/tex">[start, start + len)</script>相交的线性区，并将第一个和最后一个线性区进行切分(避免释放不在区间的线性区间)，最后释放上述这些线性区间，并清除相关的页表中的页框映射即可</p>
+<h1 id="缺页异常处理程序"><a href="#缺页异常处理程序" class="headerlink" title="缺页异常处理程序"></a>缺页异常处理程序</h1><p>根据前面进程的线性空间的分配机制<br>当为进程分配相关的线性空间时，并没有立即分配该空间对应的页框——也就是访问进程类似的地址空间时，其同样会产生异常</p>
+<p>因此，Linux的缺页异常处理程序必须可以区分如下情况：</p>
+<ul>
+<li>访问不属于进程地址空间的地址</li>
+<li>访问属于进程地址空间，但尚未分配物理页框的地址</li>
+</ul>
+<p>其情况和相关的处理程序的示意图如下所示<br><img src="缺页异常处理思路.png" alt="缺页异常处理思路"></p>
+<p>由于分页机制本身就是<strong>架构</strong>相关的，则其相关的异常处理程序自然也是<strong>架构</strong>相关，这里主要介绍<strong>x86_64</strong>架构下的缺页异常处理</p>
+<h2 id="handle-page-fault"><a href="#handle-page-fault" class="headerlink" title="handle_page_fault"></a>handle_page_fault</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/mm/fault.c#L1471">arch/x86/mm/fault.c</a>的<code>static __always_inline void handle_page_fault(struct pt_regs *regs, unsigned long error_code, unsigned long address)</code>函数处理相关的缺页异常</p>
+<p>下面给出部分化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> __always_inline <span class="keyword">void</span></span></span><br><span class="line"><span class="function"><span class="title">handle_page_fault</span><span class="params">(struct pt_regs *regs, <span class="keyword">unsigned</span> <span class="keyword">long</span> error_code,</span></span></span><br><span class="line"><span class="params"><span class="function">			      <span class="keyword">unsigned</span> <span class="keyword">long</span> address)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="comment">/* Was the fault on kernel-controlled part of the address space? */</span></span><br><span class="line">	<span class="keyword">if</span> (unlikely(fault_in_kernel_space(address))) &#123;</span><br><span class="line">		do_kern_addr_fault(regs, error_code, address);</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		do_user_addr_fault(regs, error_code, address);</span><br><span class="line">		<span class="comment">/*</span></span><br><span class="line"><span class="comment">		 * User address page fault handling might have reenabled</span></span><br><span class="line"><span class="comment">		 * interrupts. Fixing up all potential exit points of</span></span><br><span class="line"><span class="comment">		 * do_user_addr_fault() and its leaf functions is just not</span></span><br><span class="line"><span class="comment">		 * doable w/o creating an unholy mess or turning the code</span></span><br><span class="line"><span class="comment">		 * upside down.</span></span><br><span class="line"><span class="comment">		 */</span></span><br><span class="line">		local_irq_disable();</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思想就是根据异常地址的所属范围(<strong>内核态</strong>空间或<strong>用户态</strong>空间)，执行相关的逻辑即可。其示意图如下所示</p>
+<p><img src="缺页处理流程图.png" alt="缺页处理流程图"></p>
+<p>由于这篇博客主要介绍的是进程的<strong>地址空间</strong>，主要涉及的是用户态的线性区，因此主要分析访问<strong>用户态</strong>的线性空间导致的异常</p>
+<h2 id="do-user-addr-fault"><a href="#do-user-addr-fault" class="headerlink" title="do_user_addr_fault"></a>do_user_addr_fault</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/arch/x86/mm/fault.c#L1220">arch/x86/mm/fault.c</a>的<code>static inline void do_user_addr_fault(struct pt_regs *regs, unsigned long error_code, unsigned long address)</code>函数，处理访问<strong>用户态</strong>线性空间导致的异常</p>
+<p>下面给出部分化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span></span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">do_user_addr_fault</span><span class="params">(struct pt_regs *regs,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">unsigned</span> <span class="keyword">long</span> error_code,</span></span></span><br><span class="line"><span class="params"><span class="function">			<span class="keyword">unsigned</span> <span class="keyword">long</span> address)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	vma = find_vma(mm, address);</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (likely(vma-&gt;vm_start &lt;= address))</span><br><span class="line">		<span class="keyword">goto</span> good_area;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (unlikely(!(vma-&gt;vm_flags &amp; VM_GROWSDOWN))) &#123;</span><br><span class="line">		bad_area(regs, error_code, address);</span><br><span class="line">		<span class="keyword">return</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> (unlikely(expand_stack(vma, address))) &#123;</span><br><span class="line">		bad_area(regs, error_code, address);</span><br><span class="line">		<span class="keyword">return</span>;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * Ok, we have a good vm_area for this memory access, so</span></span><br><span class="line"><span class="comment">	 * we can handle it..</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">good_area:</span><br><span class="line">	<span class="keyword">if</span> (unlikely(access_error(error_code, vma))) &#123;</span><br><span class="line">		bad_area_access_error(regs, error_code, address, vma);</span><br><span class="line">		<span class="keyword">return</span>;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">/*</span></span><br><span class="line"><span class="comment">	 * If for any reason at all we couldn&#x27;t handle the fault,</span></span><br><span class="line"><span class="comment">	 * make sure we exit gracefully rather than endlessly redo</span></span><br><span class="line"><span class="comment">	 * the fault.  Since we never set FAULT_FLAG_RETRY_NOWAIT, if</span></span><br><span class="line"><span class="comment">	 * we get VM_FAULT_RETRY back, the mmap_lock has been unlocked.</span></span><br><span class="line"><span class="comment">	 *</span></span><br><span class="line"><span class="comment">	 * Note that handle_userfault() may also release and reacquire mmap_lock</span></span><br><span class="line"><span class="comment">	 * (and not return with VM_FAULT_RETRY), when returning to userland to</span></span><br><span class="line"><span class="comment">	 * repeat the page fault later with a VM_FAULT_NOPAGE retval</span></span><br><span class="line"><span class="comment">	 * (potentially after handling any pending signal during the return to</span></span><br><span class="line"><span class="comment">	 * userland). The return to userland is identified whenever</span></span><br><span class="line"><span class="comment">	 * FAULT_FLAG_USER|FAULT_FLAG_KILLABLE are both set in flags.</span></span><br><span class="line"><span class="comment">	 */</span></span><br><span class="line">	fault = handle_mm_fault(vma, address, flags, regs);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是根据<strong>缺页异常</strong>的类型进行处理</p>
+<ul>
+<li>访问进程的<strong>地址空间以内</strong>的错误地址——则检查相关的访问权限，并分配页框并更改页表即可</li>
+<li>访问进程的<strong>地址空间以外</strong>的错误地址——则发送<strong>SIGSEGV</strong>信号即可</li>
+</ul>
+<h1 id="管理进程的地址空间"><a href="#管理进程的地址空间" class="headerlink" title="管理进程的地址空间"></a>管理进程的地址空间</h1><p>实际上，当Linux创建一个子进程时，Linux内核需要为其分配一个完整的新地址空间(可能会共享地址空间)。<br>而当Linux结束某进程时，Linux内核同样撤销其地址空间</p>
+<h2 id="copy-mm"><a href="#copy-mm" class="headerlink" title="copy_mm"></a>copy_mm</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/fork.c#L1473">kernel/fork.c</a>的<code>static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)</code>函数，为新进程创建页表和相关内存描述符，从而构建新进程的地址空间</p>
+<p>下面给出部分化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">copy_mm</span><span class="params">(<span class="keyword">unsigned</span> <span class="keyword">long</span> clone_flags, struct task_struct *tsk)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	oldmm = current-&gt;mm;</span><br><span class="line">	<span class="keyword">if</span> (!oldmm)</span><br><span class="line">		<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> (clone_flags &amp; CLONE_VM) &#123;</span><br><span class="line">		mmget(oldmm);</span><br><span class="line">		mm = oldmm;</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		mm = dup_mm(tsk, current-&gt;mm);</span><br><span class="line">		<span class="keyword">if</span> (!mm)</span><br><span class="line">			<span class="keyword">return</span> -ENOMEM;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	tsk-&gt;mm = mm;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是复制父进程的页表和线性空间，从而完成线性空间的分配</p>
+<p>这里特别说明一下——在插入一个线性区间描述符后，对于<strong>私有的</strong>、<strong>可写的</strong>页，其会在页表中标记为只读，从而在<strong>缺页异常处理</strong>中使用<strong>Copy On Write</strong>机制</p>
+<h2 id="exit-mm"><a href="#exit-mm" class="headerlink" title="exit_mm"></a>exit_mm</h2><p>Linux内核通过位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/kernel/exit.c#L475">kernel/exit.c</a>的<code>static void exit_mm(void)</code>函数，释放分配给进程的地址空间资源</p>
+<p>下面给出部分化简后的逻辑<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">exit_mm</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	exit_mm_release(current, mm);</span><br><span class="line">	<span class="keyword">if</span> (!mm)</span><br><span class="line">		<span class="keyword">return</span>;</span><br><span class="line">	mmput(mm);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>其基本思路就是释放进程相关的线性区描述符、页表等资源</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.gitee.io/2022/03/07/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%B8%89/">https://jiaweihawk.gitee.io/2022/03/07/linux内核学习-三/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.gitee.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2022/02/27/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%BA%8C/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">linux内核学习-二</div></div></a></div><div class="next-post pull-right"><a href="/2022/03/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%9B%9B/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">linux内核学习-四</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2022/04/26/linux内核学习-七/" title="linux内核学习-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-26</div><div class="title">linux内核学习-七</div></div></a></div><div><a href="/2022/05/11/linux内核学习-九/" title="linux内核学习-九"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-11</div><div class="title">linux内核学习-九</div></div></a></div><div><a href="/2022/02/27/linux内核学习-二/" title="linux内核学习-二"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-02-27</div><div class="title">linux内核学习-二</div></div></a></div><div><a href="/2022/04/01/linux内核学习-五/" title="linux内核学习-五"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-01</div><div class="title">linux内核学习-五</div></div></a></div><div><a href="/2022/04/28/linux内核学习-八/" title="linux内核学习-八"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-28</div><div class="title">linux内核学习-八</div></div></a></div><div><a href="/2022/04/19/linux内核学习-六/" title="linux内核学习-六"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-19</div><div class="title">linux内核学习-六</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%9A%84%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4"><span class="toc-number">2.</span> <span class="toc-text">进程的地址空间</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#struct-mm-struct"><span class="toc-number">3.</span> <span class="toc-text">struct mm_struct</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#struct-vm-area-struct"><span class="toc-number">4.</span> <span class="toc-text">struct vm_area_struct</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E6%80%A7%E5%8C%BA%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">4.1.</span> <span class="toc-text">线性区数据结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%BF%E6%80%A7%E5%8C%BA%E8%AE%BF%E9%97%AE%E6%9D%83%E9%99%90"><span class="toc-number">4.2.</span> <span class="toc-text">线性区访问权限</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BA%BF%E6%80%A7%E5%8C%BA%E7%9A%84%E6%93%8D%E4%BD%9C"><span class="toc-number">5.</span> <span class="toc-text">线性区的操作</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#find-vma"><span class="toc-number">5.1.</span> <span class="toc-text">find_vma</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#find-vma-intersection"><span class="toc-number">5.2.</span> <span class="toc-text">find_vma_intersection</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#get-unmapped-area"><span class="toc-number">5.3.</span> <span class="toc-text">get_unmapped_area</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#do-mmap"><span class="toc-number">5.4.</span> <span class="toc-text">do_mmap</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#do-munmap"><span class="toc-number">5.5.</span> <span class="toc-text">do_munmap</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BC%BA%E9%A1%B5%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86%E7%A8%8B%E5%BA%8F"><span class="toc-number">6.</span> <span class="toc-text">缺页异常处理程序</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#handle-page-fault"><span class="toc-number">6.1.</span> <span class="toc-text">handle_page_fault</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#do-user-addr-fault"><span class="toc-number">6.2.</span> <span class="toc-text">do_user_addr_fault</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%AE%A1%E7%90%86%E8%BF%9B%E7%A8%8B%E7%9A%84%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4"><span class="toc-number">7.</span> <span class="toc-text">管理进程的地址空间</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#copy-mm"><span class="toc-number">7.1.</span> <span class="toc-text">copy_mm</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#exit-mm"><span class="toc-number">7.2.</span> <span class="toc-text">exit_mm</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/26/xv6-%E4%B8%89/" title="xv6-三">xv6-三</a><time datetime="2022-05-26T01:46:10.000Z" title="发表于 2022-05-26 09:46:10">2022-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/21/xv6-%E4%BA%8C/" title="xv6-二">xv6-二</a><time datetime="2022-05-21T14:24:40.000Z" title="发表于 2022-05-21 22:24:40">2022-05-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/19/xv6/" title="xv6">xv6</a><time datetime="2022-05-19T12:05:10.000Z" title="发表于 2022-05-19 20:05:10">2022-05-19</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
+  window.MathJax = {
+    loader: {
+      source: {
+        '[tex]/amsCd': '[tex]/amscd'
+      }
+    },
+    tex: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"]],
+      tags: 'ams'
+    },
+    options: {
+      renderActions: {
+        findScript: [10, doc => {
+          for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+            const display = !!node.type.match(/; *mode=display/)
+            const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+            const text = document.createTextNode('')
+            node.parentNode.replaceChild(text, node)
+            math.start = {node: text, delim: '', n: 0}
+            math.end = {node: text, delim: '', n: 0}
+            doc.math.push(math)
+          }
+        }, ''],
+        addClass: [200,() => {
+          document.querySelectorAll('mjx-container:not([display=\'true\']').forEach( node => {
+            const target = node.parentNode
+            if (!target.classList.contains('has-jax')) {
+              target.classList.add('mathjax-overflow')
+            }
+          })
+        }, '', false]
+      }
+    }
+  }
+  
+  const script = document.createElement('script')
+  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+  script.id = 'MathJax-script'
+  script.async = true
+  document.head.appendChild(script)
+} else {
+  MathJax.startup.document.state(0)
+  MathJax.texReset()
+  MathJax.typeset()
+}</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

@@ -9,7 +9,7 @@
 <meta property="article:author" content="H4wk1ns">
 <meta property="article:tag" content="H4wk1ns&#39;s blog">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://jiaweihawk.gitee.io/img/profile.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.gitee.io/page/3/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+<meta name="twitter:image" content="https://jiaweihawk.gitee.io/img/profile.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.gitee.io/page/3/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
   root: '/',
   algolia: undefined,
   localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容：${query}"}},
@@ -56,7 +56,7 @@
   isHome: true,
   isHighlightShrink: false,
   isToc: false,
-  postUpdate: '2022-01-12 16:20:55'
+  postUpdate: '2022-06-12 18:27:36'
 }</script><noscript><style type="text/css">
   #nav {
     opacity: 1
@@ -134,68 +134,159 @@
     if (fontSizeVal !== undefined) {
       document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
     }
-    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">22</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="page" id="body-wrap"><header class="full_page" id="page-header" style="background-image: url('https://picture.zwc365.com/getbing.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="site-info"><h1 id="site-title">H4wk1ns's blog</h1></div><div id="scroll-down"><i class="fas fa-angle-down scroll-down-effects"></i></div></header><main class="layout" id="content-inner"><div class="recent-posts" id="recent-posts"><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2021/08/10/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E5%9B%9B/" title="操作系统-设计与实现-四">操作系统-设计与实现-四</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2021-08-10T01:21:41.000Z" title="发表于 2021-08-10 09:21:41">2021-08-10</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E6%89%8B%E5%86%99/">手写</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/%E6%89%8B%E5%86%99/">手写</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">操作系统</a></span></div><div class="content">前言  jyy老师太强了。这一章介绍一下并发控制中互斥相关的内容，并实现课程中的L1实验
-互斥  实现共享内存上的互斥，并不是一个非常简单的事情:
-
-系统不能同时读/写共享内存(除了原子指令)，即load时不能写，只能单纯的读;而写的时候，无法进行读(即使类似于addq $1, [sum]这种指令，其也是分为读值、计算和写值三部分)。从而当一个线程完成状态读取和状态设置时，其实这两者之间可能状态已经发生了变化(另一个线程完成了状态读取和状态设置)
-系统可能乱序执行指令。可能有些精妙的算法可以规避1.中的问题，例如Peterson算法。但是现代操作系统可能的指令乱序执行(即可能在读之前完成写)，也会导致互斥的失败
-
-  可以看到，单纯的从软件上实现共享内存的互斥是非常困难的一件事情，因此这就往往需要硬件上进行协调配合!  硬件可以通过诸如锁总线的方式，原子的实现load-exec-store指令，从而为我们实现共享内存上的互斥提供了有效的解决方法。  这些原子指令，完美的解决了上面的两个难点，因此很容易就实现共享内存的互斥。这些方案往往简洁，且很好理解，如下面基于xchg的自选锁实现的共 ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2021/08/06/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%89/" title="操作系统-设计与实现-三">操作系统-设计与实现-三</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2021-08-06T07:18:14.000Z" title="发表于 2021-08-06 15:18:14">2021-08-06</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E6%89%8B%E5%86%99/">手写</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/%E6%89%8B%E5%86%99/">手写</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">操作系统</a></span></div><div class="content">前言  这一章稍微介绍一下多线程程序存在的问题，以及实现课程中的M2实验
-多线程程序存在的问题  这里，我们将使用二段代码，说明多线程程序中存在的各种问题。第一段代码如下所示  12345678910111213#define n 100000000long sum = 0;void do_sum() &#123;  for (int i = 0; i &lt; n; i++) sum++;&#125;void print() &#123;  printf(&quot;sum = %ld\n&quot;, sum);&#125;int main() &#123;  create(do_sum);  create(do_sum);  join(print);&#125;
-  其中，create和join是包装pthread库的函数。  如果我们采用O0优化，即执行gcc -O0，则其输出基本一直是介于100000000到200000000的值;
-  如果我们采用O1优化，即执行gcc -O1，则其输出基本一直是100000000;
-  如果我们采用o2优化，即执行gcc -O2，则其输出 ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2021/08/01/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%BA%8C/" title="操作系统-设计与实现-二">操作系统-设计与实现-二</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2021-08-01T13:23:36.000Z" title="发表于 2021-08-01 21:23:36">2021-08-01</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E6%89%8B%E5%86%99/">手写</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/%E6%89%8B%E5%86%99/">手写</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">操作系统</a></span></div><div class="content">前言  这一章没有新的内容，仅仅是实现课程中的L0实验
-L0直接运行在硬件上的小游戏实验背景  传统上，操作系统被认为就是”写汇编”、”跟底层打交道”。但实际上，操作系统和硬件之间的关系被夸大了。操作系统实际上不过就是一个直接运行在计算机上的(高级语言)程序而已，只是会在适当的时候调用操作系统提供的机制。  因此，在初始化完成后设置好一个没有标准库的C程序运行环境，其中包含栈区、静态数据、堆区;代码从main函数开始执行，并允许我们在程序运行过程中直接、独占式地访问操作系统中的物理设备(例如显示器、计时器)和响应中断，即可实现当下主流的操作系统
-实验描述
-实验要求1:实现AbstractMachine中klib中缺失的函数
-
-AbstractMachine的项目中包含一个基础运行库的框架klib，其中包含了方便你编写bare-metal程序的系列库函数，例如assert、printf和memcpy等。尽可能实现有能力实现的代码
-
-实验要求2:实现可移植的、直接运行在计算机硬件上的小游戏
-
-你需要编写一个直接运行在AbstractMachine上(仅仅是用IOE拓展，不使用其他硬件机制如 ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2021/07/24/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0/" title="操作系统-设计与实现">操作系统-设计与实现</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2021-07-24T13:14:17.000Z" title="发表于 2021-07-24 21:14:17">2021-07-24</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E6%89%8B%E5%86%99/">手写</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/%E6%89%8B%E5%86%99/">手写</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/">操作系统</a></span></div><div class="content">前言  因为比较欠缺计算机基础知识，这里特别选取了南京大学蒋炎岩老师的《操作系统：设计与实现》，从而从理论和实践两方面，补全操作系统相关的知识  这些博客将简单记录重要的理论知识，以及全部的相关实验和实验心得，作为成长道路上的积累
-M1打印进程树实验背景  在Linux中，everything is a file。因此操作系统的状态也可以成为文件系统的一部分——在保持文件系统基本API没有变化的基础上，添加相关对象管理操作系统的状态信息。
-实验描述
-实验要求：实现pstree，打印进程之间的树状的父子关系
-
-Linux系统中可以同时运行多个程序。运行的程序称为进程。除了所有进程的根外，每个进程都只有唯一的父进程，你的任务就是将这颗树在命令行中输出。你可以自由选择展示树的方式。
+    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="page" id="body-wrap"><header class="full_page" id="page-header" style="background-image: url('https://picture.zwc365.com/getbing.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="site-info"><h1 id="site-title">H4wk1ns's blog</h1></div><div id="scroll-down"><i class="fas fa-angle-down scroll-down-effects"></i></div></header><main class="layout" id="content-inner"><div class="recent-posts" id="recent-posts"><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2022/04/01/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%BA%94/" title="linux内核学习-五">linux内核学习-五</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2022-04-01T06:57:51.000Z" title="发表于 2022-04-01 14:57:51">2022-04-01</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/linux/">linux</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="content">前言本篇博客介绍一下Linux的进程相关内容
+进程描述符一个进程描述符应当包含进程相关的所有信息，所以其结构会非常复杂。
+struct task_structLinux内核使用位于include/linux/sched.h的相关结构体，来管理进程信息。其相关的重要字段如下所示
 
 
-总览  1pstree [OPTION]...
-描述  把系统中的进程按照父亲-孩子的树状结构打印到终端
-
--p —show-pids:打印每个进程的进程号
--n —numeric-sort:按照pid的数值从小到大顺序输出一个进程的直接孩子
--V —version:打印版本信息
-你可以在命令行中观察系统的p ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2021/07/22/%E8%B0%83%E7%94%A8%E6%B1%87%E7%BC%96%E4%BB%A3%E7%A0%81%E7%AC%A6%E5%8F%B7/" title="调用汇编代码符号">调用汇编代码符号</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2021-07-22T14:19:09.000Z" title="发表于 2021-07-22 22:19:09">2021-07-22</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8/">信息安全</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8/">信息安全</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/ctf/">ctf</a></span></div><div class="content">前言  这里遇到了一个相关的CTF习题，看到其WP中的思路不错，特别学习一下
-题目  其是picoCTF的asm4，题目要求获取调用asm4(&quot;picoCTF_a3112&quot;)的结果，其中附件代码如下所示  12345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758asm4:        &lt;+0&gt;:   push   ebp        &lt;+1&gt;:   mov    ebp,esp        &lt;+3&gt;:   push   ebx        &lt;+4&gt;:   sub    esp,0x10        &lt;+7&gt;:   mov    DWORD PTR [ebp-0x10],0x246        &lt;+14&gt;:  mov    DWORD PTR [ebp-0xc],0x0        &lt;+21&gt;:  jmp    0x ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2021/07/15/%E6%B7%B1%E5%85%A5%E4%BA%86%E8%A7%A3const/" title="深入了解const">深入了解const</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2021-07-15T10:03:14.000Z" title="发表于 2021-07-15 18:03:14">2021-07-15</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E7%BC%96%E7%A8%8B/">编程</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/c/">c++</a></span></div><div class="content">前言  之前在学习C++的时候，对于const等相关概念了解的不是很清楚，最后在使用时就很痛苦😖  这次彻底的总结一下const相关的知识点
-阅读变量声明  实际上，const位于变量声明的不同位置，会产生不同的作用。因此，首先我们需要学会如何阅读变量的声明语句，从而了解变量的具体类型，获取const修饰的对象，才能知道其作用。
-  这里我们依照由右至左规则，可以有效的分解变量的类型。
-  整个由右至左规则如下所示：
-
-从变量名称开始
-向右依次列出所有的关键词，直到遇到不匹配的右括号或者结束停止
-向左依次列出所有的关键词，直到遇到不匹配的左括号或者结束停止
-如果因为括号停止，则跳出括号，重新执行步骤2.
-这里我们举一个比较有挑战性的例子
-1char (*(*x())[])();
 
 
-下面给出按照上述分析的步骤
-
-根据步骤1，找到变量名称x，即 char (*(*x())[])();
-根据步骤2
-找到()，即 char (*(*x())[])();，因此为无参函数
-右边遇到不匹配右括号，结束
+类型
+字段名称
+描述
 
 
-根据步骤3
-找到*，即 char (*(*x())[])();，因此返回值为指针
-左边遇到 ...</div></div></div><nav id="pagination"><div class="pagination"><a class="extend prev" rel="prev" href="/page/2/#content-inner"><i class="fas fa-chevron-left fa-fw"></i></a><a class="page-number" href="/">1</a><a class="page-number" href="/page/2/#content-inner">2</a><span class="page-number current">3</span><a class="page-number" href="/page/4/#content-inner">4</a><a class="extend next" rel="next" href="/page/4/#content-inner"><i class="fas fa-chevron-right fa-fw"></i></a></div></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">22</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2021/12/15/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B9%9D/" title="操作系统-设计与实现-九">操作系统-设计与实现-九</a><time datetime="2021-12-15T08:37:16.000Z" title="发表于 2021-12-15 16:37:16">2021-12-15</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2021/12/05/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E5%85%AB/" title="操作系统-设计与实现-八">操作系统-设计与实现-八</a><time datetime="2021-12-05T13:42:05.000Z" title="发表于 2021-12-05 21:42:05">2021-12-05</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2021/12/01/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%83/" title="操作系统-设计与实现-七">操作系统-设计与实现-七</a><time datetime="2021-12-01T10:22:18.000Z" title="发表于 2021-12-01 18:22:18">2021-12-01</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2021/10/21/glibc2-31%E4%B8%8Blargebin%E6%94%BB%E5%87%BB/" title="glibc2.31下largebin攻击">glibc2.31下largebin攻击</a><time datetime="2021-10-21T10:46:56.000Z" title="发表于 2021-10-21 18:46:56">2021-10-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2021/10/04/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E5%85%AD/" title="操作系统-设计与实现-六">操作系统-设计与实现-六</a><time datetime="2021-10-04T14:51:14.000Z" title="发表于 2021-10-04 22:51:14">2021-10-04</time></div></div></div></div><div class="card-widget card-categories"><div class="item-headline">
+
+
+struct thread_info
+thread_info
+包含不同架构下，进程所需的PCB块信息
+
+
+unsigned int
+__state
+当前进程的状态
+
+
+void *
+stack
+进程的内核态栈——当进程陷入内核态时，使用的栈结构
+
+
+struct list_head
+tasks
+用于管理系统中所有进程的双向链表
+
+
+struct mm_struct *
+mm
+当前进程的虚拟地址空间
+
+
+pid_t
+pid
+进程唯一标识符
+
+
+pid_t
+tgid
+进程所属的进程组领头线程的进程唯一标识符
+
+
+struct fs_struct*
+fs
+进程的文件信息，诸如根目录、当前工作目录等
+
+
+struct files_struct *
+files
+进程的打开文件信息
+
+
+ ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2022/03/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%9B%9B/" title="linux内核学习-四">linux内核学习-四</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2022-03-14T06:13:59.000Z" title="发表于 2022-03-14 14:13:59">2022-03-14</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/linux/">linux</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="content">前言这篇博客讲解一下Linux的虚拟文件系统机制，其包含的内容和细节十分之多
+虚拟文件系统Linux内核通过虚拟文件系统(Virtual Filesystem Switch)，从而可以健壮的为各种不同的文件系统提供一个通用的接口
+具体的，VFS将文件系统划分为三种类型
+
+磁盘文件系统这些文件系统管理在本地磁盘分区中的可用存储空间，或其他可以起到磁盘作用的设备。例如Linux的第二拓展文件系统(Ext2)或微软的VFAT文件系统
+网络文件系统这些文件系统允许轻易地访问属于其他网络计算机的文件系统所包含的文件。例如微软的CIFS文件系统
+特殊文件系统这些文件系统不参与管理本地或远程的磁盘空间。例如/proc文件系统
+
+通用文件模型VFS引入通用文件模型(common file model)，用以抽象其支持的所有文件系统。通用文件模型采用面向对象的思想，定义了对象的数据结构，和其上的操作方法。通用文件类型使用类似C++的虚表方法进行实现。
+通用文件类型由下列四个对象类型组成
+
+超级块对象(superblock object) 
+索引节点对象(inode object)
+文件对象(file o ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2022/03/07/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%B8%89/" title="linux内核学习-三">linux内核学习-三</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2022-03-07T00:40:55.000Z" title="发表于 2022-03-07 08:40:55">2022-03-07</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/linux/">linux</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="content">前言前面博客分析了Linux内核对于物理内存的管理机制，下面介绍一下Linux内核对于进程地址空间的管理机制
+实际上，进程地址空间，也就是进程的虚拟地址空间
+进程的地址空间进程的地址空间(address space)，是由允许进程使用的全部线性地址组成的。
+也就是说，内核通过管理所谓的线性区的资源，从而表示一个进程的线性地址区间，进而管理进程的地址空间
+struct mm_struct进程通过位于include/linux/mm_types.h的进程内存描述符，管理进程中与进程地址空间有关的全部信息。其相关的重要字段如下所示
+
+
+
+
+类型
+字段名称
+描述
+
+
+
+
+struct vm_area_struct *
+mmap
+指向线性区对象的链表头
+
+
+struct rb_root
+mm_rb
+指向线性区对象的红-黑树的根
+
+
+unsigned long ()(struct file filp, unsigned long addr, unsigned long len, unsigned long pgoff, unsigned long flags)
+get_ummaped_area
+在 ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2022/02/27/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E4%BA%8C/" title="linux内核学习-二">linux内核学习-二</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2022-02-27T08:07:48.000Z" title="发表于 2022-02-27 16:07:48">2022-02-27</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/linux/">linux</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="content">前言这篇博客主要学习Linux内核对于物理内存的管理机制——其同样将物理内存以页(页框)为单位，进行管理和分配
+这里在额外说明一下——无论是内核态，亦或是用户态，其访问的都是线性地址(逻辑地址几乎不使用)，因此是需要进行分页转换的。但是对于内核态来说稍显特殊，其映射基本就是(线性地址 = 物理地址 + 内核载入线性地址)，并且分页映射基本不改变(x86下会有一部分内存专门用来进行动态映射)其原因很简单，内核需要始终保持在内存中——例如，如果内核中处理中断的程序被换入swap分区，则直接😥因此，实际上管理内核虚拟存储，就是管理物理页框
+struct pageLinux内核为了可以正常的管理内存，必须记录每个页框的状态，其通过位于include/linux/mm_types.h路径的struct page结构体，来管理每一个页框。下面简单分析一下其几个重要的字段
+
+
+
+
+类型
+成员名称
+描述
+
+
+
+
+unsigned long
+flags
+一组标号，表示当前页框的状态
+
+
+atomic_t
+_refcount
+页框的引用计数
+
+
+atomic_t
+_mapcount
+在页表中被映射的次数 ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2022/02/22/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0/" title="linux内核学习">linux内核学习</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2022-02-22T08:35:59.000Z" title="发表于 2022-02-22 16:35:59">2022-02-22</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/linux/">linux</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="content">前言  为了更好的了解Linux机制，为Kernel Pwn打下基础。则首先从正向分析分析Linux机制(调试源代码)，之后根据后续的需要再继续研究即可
+环境搭建编译内核
+从镜像链接处下载相关版本的内核代码即可这里选择linux-5.8版本进行研究
+执行如下命令，安装相关依赖123sudo apt-get update -y \  &amp;&amp; sudo apt-get install -y \  fakeroot build-essential ncurses-dev xz-utils libssl-dev bc libelf-dev flex bison dwarves
+执行如下命令解压内核源代码1tar -zxvf $(find . -maxdepth 1 -type f -name &quot;linux*&quot;)
+执行如下命令配置内核1(cd $(find . -maxdepth 1 -type d -name &quot;linux*&quot;); make menuconfig)
+执行如下命令编译内核1(cd $(find . -maxdepth 1 -t ...</div></div></div><div class="recent-post-item"><div class="recent-post-info no-cover"><a class="article-title" href="/2022/02/07/%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0-%E4%B8%89/" title="编译原理-设计与实现-三">编译原理-设计与实现-三</a><div class="article-meta-wrap"><span class="post-meta-date"><i class="far fa-calendar-alt"></i><span class="article-meta-label">发表于</span><time datetime="2022-02-07T07:06:13.000Z" title="发表于 2022-02-07 15:06:13">2022-02-07</time></span><span class="article-meta"><span class="article-meta__separator">|</span><i class="fas fa-inbox"></i><a class="article-meta__categories" href="/categories/%E6%89%8B%E5%86%99/">手写</a></span><span class="article-meta tags"><span class="article-meta__separator">|</span><i class="fas fa-tag"></i><a class="article-meta__tags" href="/tags/%E6%89%8B%E5%86%99/">手写</a><span class="article-meta__link">•</span><a class="article-meta__tags" href="/tags/%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86/">编译原理</a></span></div><div class="content">前言  语义分析略难…。  这里简单记录一下语义分析相关的知识，并且完成Programming Assignment V
+Semantic Analysis  语义分析是编译器的第三个阶段。语义分析器从语法分析器处获得一棵AST，并检查该AST的上下文相关的属性
+属性文法  为了确定AST中诸如变量节点类型等问题，则自然的，需要指定该节点的数据类型属性，则必须给节点配备一系列属性。
+  然后，再利用节点的相关属性，从而在AST上进行一系列的语义动作(诸如类型检查等)
+Syntax-Directed Definition  语法制导定义(SDD)，即为每个文法符号引入一组属性，并且每个文法的产生式都配备一组与之关联的语义计算规则
+  而这些属性可以简单分为两类
+
+综合属性(synthesized attribute):即产生式头的符号属性由产生式体的属性定义
+
+继承属性(inherited attribute):即产生式体的符号属性由产生式头和该符号左侧的产生式体的属性定义
+基于此，可简单将SDD分为两类
+
+S属性如果一个SDD的每个属性都是综合属性
+L属性对于SDD的每个属性
+
+要么是 ...</div></div></div><nav id="pagination"><div class="pagination"><a class="extend prev" rel="prev" href="/page/2/#content-inner"><i class="fas fa-chevron-left fa-fw"></i></a><a class="page-number" href="/">1</a><a class="page-number" href="/page/2/#content-inner">2</a><span class="page-number current">3</span><a class="page-number" href="/page/4/#content-inner">4</a><span class="space">&hellip;</span><a class="page-number" href="/page/7/#content-inner">7</a><a class="extend next" rel="next" href="/page/4/#content-inner"><i class="fas fa-chevron-right fa-fw"></i></a></div></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">41</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/26/xv6-%E4%B8%89/" title="xv6-三">xv6-三</a><time datetime="2022-05-26T01:46:10.000Z" title="发表于 2022-05-26 09:46:10">2022-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/21/xv6-%E4%BA%8C/" title="xv6-二">xv6-二</a><time datetime="2022-05-21T14:24:40.000Z" title="发表于 2022-05-21 22:24:40">2022-05-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/19/xv6/" title="xv6">xv6</a><time datetime="2022-05-19T12:05:10.000Z" title="发表于 2022-05-19 20:05:10">2022-05-19</time></div></div></div></div><div class="card-widget card-categories"><div class="item-headline">
             <i class="fas fa-folder-open"></i>
             <span>分类</span>
             
             </div>
             <ul class="card-category-list" id="aside-cat-list">
-            <li class="card-category-list-item "><a class="card-category-list-link" href="/categories/ctf/"><span class="card-category-list-name">ctf</span><span class="card-category-list-count">5</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8/"><span class="card-category-list-name">信息安全</span><span class="card-category-list-count">2</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E6%89%8B%E5%86%99/"><span class="card-category-list-name">手写</span><span class="card-category-list-count">11</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E7%AE%97%E6%B3%95/"><span class="card-category-list-name">算法</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E7%BC%96%E7%A8%8B/"><span class="card-category-list-name">编程</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E8%AE%BE%E7%BD%AE/"><span class="card-category-list-name">设置</span><span class="card-category-list-count">2</span></a></li>
-            </ul></div><div class="card-widget card-tags"><div class="item-headline"><i class="fas fa-tags"></i><span>标签</span></div><div class="card-tag-cloud"><a href="/tags/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8/" style="font-size: 1.35em; color: rgb(133, 144, 174)">信息安全</a><a href="/tags/%E8%AE%BE%E7%BD%AE/" style="font-size: 1.25em; color: rgb(188, 147, 135)">设置</a><a href="/tags/ctf/" style="font-size: 1.3em; color: rgb(66, 163, 115)">ctf</a><a href="/tags/%E7%B3%BB%E7%BB%9F%E5%90%AF%E5%8A%A8/" style="font-size: 1.15em; color: rgb(148, 12, 186)">系统启动</a><a href="/tags/nodejs/" style="font-size: 1.15em; color: rgb(174, 84, 25)">nodejs</a><a href="/tags/hexo/" style="font-size: 1.15em; color: rgb(198, 80, 144)">hexo</a><a href="/tags/%E6%89%8B%E5%86%99/" style="font-size: 1.45em; color: rgb(34, 113, 96)">手写</a><a href="/tags/C%E8%AF%AD%E8%A8%80%E8%BF%90%E8%A1%8C%E5%BA%93/" style="font-size: 1.2em; color: rgb(37, 89, 91)">C语言运行库</a><a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" style="font-size: 1.4em; color: rgb(33, 21, 40)">操作系统</a><a href="/tags/c/" style="font-size: 1.15em; color: rgb(154, 165, 37)">c++</a><a href="/tags/%E7%AE%97%E6%B3%95/" style="font-size: 1.15em; color: rgb(129, 127, 176)">算法</a><a href="/tags/%E7%BC%96%E7%A8%8B/" style="font-size: 1.15em; color: rgb(150, 65, 61)">编程</a></div></div><div class="card-widget card-archives"><div class="item-headline"><i class="fas fa-archive"></i><span>归档</span></div><ul class="card-archive-list"><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/12/"><span class="card-archive-list-date">十二月 2021</span><span class="card-archive-list-count">3</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/10/"><span class="card-archive-list-date">十月 2021</span><span class="card-archive-list-count">2</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/09/"><span class="card-archive-list-date">九月 2021</span><span class="card-archive-list-count">6</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/08/"><span class="card-archive-list-date">八月 2021</span><span class="card-archive-list-count">3</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/07/"><span class="card-archive-list-date">七月 2021</span><span class="card-archive-list-count">6</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/06/"><span class="card-archive-list-date">六月 2021</span><span class="card-archive-list-count">1</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/05/"><span class="card-archive-list-date">五月 2021</span><span class="card-archive-list-count">1</span></a></li></ul></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"></div></div></body></html>
+            <li class="card-category-list-item "><a class="card-category-list-link" href="/categories/ctf/"><span class="card-category-list-name">ctf</span><span class="card-category-list-count">5</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8/"><span class="card-category-list-name">信息安全</span><span class="card-category-list-count">2</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E5%86%85%E6%A0%B8/"><span class="card-category-list-name">内核</span><span class="card-category-list-count">10</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E6%89%8B%E5%86%99/"><span class="card-category-list-name">手写</span><span class="card-category-list-count">19</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E7%AE%97%E6%B3%95/"><span class="card-category-list-name">算法</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E7%BC%96%E7%A8%8B/"><span class="card-category-list-name">编程</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/categories/%E8%AE%BE%E7%BD%AE/"><span class="card-category-list-name">设置</span><span class="card-category-list-count">3</span></a></li>
+            </ul></div><div class="card-widget card-tags"><div class="item-headline"><i class="fas fa-tags"></i><span>标签</span></div><div class="card-tag-cloud"><a href="/tags/%E4%BF%A1%E6%81%AF%E5%AE%89%E5%85%A8/" style="font-size: 1.32em; color: rgb(184, 153, 179)">信息安全</a><a href="/tags/%E8%AE%BE%E7%BD%AE/" style="font-size: 1.25em; color: rgb(140, 116, 198)">设置</a><a href="/tags/ctf/" style="font-size: 1.28em; color: rgb(192, 200, 61)">ctf</a><a href="/tags/linux/" style="font-size: 1.38em; color: rgb(13, 179, 151)">linux</a><a href="/tags/%E5%86%85%E6%A0%B8/" style="font-size: 1.42em; color: rgb(30, 98, 169)">内核</a><a href="/tags/%E7%B3%BB%E7%BB%9F%E5%90%AF%E5%8A%A8/" style="font-size: 1.15em; color: rgb(1, 156, 51)">系统启动</a><a href="/tags/%E6%89%8B%E5%86%99/" style="font-size: 1.45em; color: rgb(192, 104, 159)">手写</a><a href="/tags/nodejs/" style="font-size: 1.15em; color: rgb(85, 125, 60)">nodejs</a><a href="/tags/hexo/" style="font-size: 1.15em; color: rgb(143, 119, 30)">hexo</a><a href="/tags/C%E8%AF%AD%E8%A8%80%E8%BF%90%E8%A1%8C%E5%BA%93/" style="font-size: 1.18em; color: rgb(151, 100, 16)">C语言运行库</a><a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" style="font-size: 1.35em; color: rgb(152, 61, 145)">操作系统</a><a href="/tags/c/" style="font-size: 1.15em; color: rgb(57, 123, 29)">c++</a><a href="/tags/%E7%AE%97%E6%B3%95/" style="font-size: 1.15em; color: rgb(126, 163, 186)">算法</a><a href="/tags/%E7%BC%96%E7%A8%8B/" style="font-size: 1.15em; color: rgb(138, 116, 68)">编程</a><a href="/tags/%E6%B8%97%E9%80%8F%E6%B5%8B%E8%AF%95/" style="font-size: 1.15em; color: rgb(199, 108, 125)">渗透测试</a><a href="/tags/%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86/" style="font-size: 1.22em; color: rgb(132, 8, 104)">编译原理</a></div></div><div class="card-widget card-archives"><div class="item-headline"><i class="fas fa-archive"></i><span>归档</span><a class="card-more-btn" href="/archives/" title="查看更多">
+    <i class="fas fa-angle-right"></i></a></div><ul class="card-archive-list"><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2022/06/"><span class="card-archive-list-date">六月 2022</span><span class="card-archive-list-count">2</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2022/05/"><span class="card-archive-list-date">五月 2022</span><span class="card-archive-list-count">5</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2022/04/"><span class="card-archive-list-date">四月 2022</span><span class="card-archive-list-count">5</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2022/03/"><span class="card-archive-list-date">三月 2022</span><span class="card-archive-list-count">2</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2022/02/"><span class="card-archive-list-date">二月 2022</span><span class="card-archive-list-count">3</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2022/01/"><span class="card-archive-list-date">一月 2022</span><span class="card-archive-list-count">2</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/12/"><span class="card-archive-list-date">十二月 2021</span><span class="card-archive-list-count">3</span></a></li><li class="card-archive-list-item"><a class="card-archive-list-link" href="/archives/2021/10/"><span class="card-archive-list-date">十月 2021</span><span class="card-archive-list-count">2</span></a></li></ul></div><div class="card-widget card-webinfo"><div class="item-headline"><i class="fas fa-chart-line"></i><span>网站资讯</span></div><div class="webinfo"><div class="webinfo-item"><div class="item-name">文章数目 :</div><div class="item-count">41</div></div><div class="webinfo-item"><div class="item-name">本站访客数 :</div><div class="item-count" id="busuanzi_value_site_uv"></div></div><div class="webinfo-item"><div class="item-name">本站总访问量 :</div><div class="item-count" id="busuanzi_value_site_pv"></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
