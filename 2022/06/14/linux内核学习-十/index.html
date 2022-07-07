@@ -7,7 +7,7 @@
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://jiaweihawk.gitee.io/img/background.jpg">
 <meta property="article:published_time" content="2022-06-14T02:35:57.000Z">
-<meta property="article:modified_time" content="2022-06-14T08:38:57.292Z">
+<meta property="article:modified_time" content="2022-07-07T08:09:38.396Z">
 <meta property="article:author" content="H4wk1ns">
 <meta property="article:tag" content="linux">
 <meta property="article:tag" content="内核">
@@ -59,7 +59,7 @@
   isHome: false,
   isHighlightShrink: false,
   isToc: true,
-  postUpdate: '2022-06-14 16:38:57'
+  postUpdate: '2022-07-07 16:09:38'
 }</script><noscript><style type="text/css">
   #nav {
     opacity: 1
@@ -137,7 +137,7 @@
     if (fontSizeVal !== undefined) {
       document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
     }
-    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">43</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">linux内核学习-十</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-06-14T02:35:57.000Z" title="发表于 2022-06-14 10:35:57">2022-06-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-06-14T08:38:57.292Z" title="更新于 2022-06-14 16:38:57">2022-06-14</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">1.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>4分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="linux内核学习-十"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>这篇博客主要介绍一下块设备的I/O驱动程序</p>
+    })(window)</script><meta name="generator" content="Hexo 5.4.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">44</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">linux内核学习-十</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-06-14T02:35:57.000Z" title="发表于 2022-06-14 10:35:57">2022-06-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-07-07T08:09:38.396Z" title="更新于 2022-07-07 16:09:38">2022-07-07</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">3.6k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>11分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="linux内核学习-十"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>这篇博客主要介绍一下块设备的I/O驱动程序</p>
 <p>块设备主要的特点是CPU和总线读写数据所花的时间，与磁盘硬件的速度不相匹配。为了解决该问题，Linux内核使用了相当复杂的结构来抽象块设备，从而提高块设备的性能</p>
 <h1 id="块设备模型"><a href="#块设备模型" class="headerlink" title="块设备模型"></a>块设备模型</h1><p>Linux内核将块设备抽象为如下图所示的组织层次<br><img src="块设备模型.png" alt="块设备模型"></p>
 <p>下面是<strong>read</strong>系统调用中各个组织层次的基本处理过程</p>
@@ -198,7 +198,341 @@
 </table>
 </div>
 <h2 id="segment"><a href="#segment" class="headerlink" title="segment"></a>segment</h2><p>实际上，段是块设备驱动程序传送数据的基本单位<br>Linux内核对块设备的每个I/O操作，就是在块设备与一些RAM单元之间相互传送一些相邻扇区的内容。大多数情况下，磁盘控制器直接采用<strong>DMA</strong>方式进行数据传送。而一般<strong>DMA</strong>传送的是磁盘上相邻扇区的数据(否则传送效率过低)。而一个段就是一个内存页或内存页中的一部分，其包含一些相邻磁盘扇区中的数据</p>
-<h1 id="generic-block-layer"><a href="#generic-block-layer" class="headerlink" title="generic block layer"></a>generic block layer</h1><h1 id="I-O-scheduler-layer"><a href="#I-O-scheduler-layer" class="headerlink" title="I/O scheduler layer"></a>I/O scheduler layer</h1><h1 id="块设备驱动程序"><a href="#块设备驱动程序" class="headerlink" title="块设备驱动程序"></a>块设备驱动程序</h1></article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.gitee.io/2022/06/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%8D%81/">https://jiaweihawk.gitee.io/2022/06/14/linux内核学习-十/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.gitee.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2022/06/11/xv6-%E4%BA%94/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">xv6-五</div></div></a></div><div class="next-post pull-right"><a href="/2022/06/14/xv6-%E5%85%AD/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">xv6-六</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2022/04/26/linux内核学习-七/" title="linux内核学习-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-26</div><div class="title">linux内核学习-七</div></div></a></div><div><a href="/2022/03/07/linux内核学习-三/" title="linux内核学习-三"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-03-07</div><div class="title">linux内核学习-三</div></div></a></div><div><a href="/2022/05/11/linux内核学习-九/" title="linux内核学习-九"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-11</div><div class="title">linux内核学习-九</div></div></a></div><div><a href="/2022/02/27/linux内核学习-二/" title="linux内核学习-二"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-02-27</div><div class="title">linux内核学习-二</div></div></a></div><div><a href="/2022/04/28/linux内核学习-八/" title="linux内核学习-八"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-28</div><div class="title">linux内核学习-八</div></div></a></div><div><a href="/2022/04/19/linux内核学习-六/" title="linux内核学习-六"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-19</div><div class="title">linux内核学习-六</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">43</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%9D%97%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">块设备模型</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#sector"><span class="toc-number">2.1.</span> <span class="toc-text">sector</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#block"><span class="toc-number">2.2.</span> <span class="toc-text">block</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#segment"><span class="toc-number">2.3.</span> <span class="toc-text">segment</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#generic-block-layer"><span class="toc-number">3.</span> <span class="toc-text">generic block layer</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#I-O-scheduler-layer"><span class="toc-number">4.</span> <span class="toc-text">I&#x2F;O scheduler layer</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%9D%97%E8%AE%BE%E5%A4%87%E9%A9%B1%E5%8A%A8%E7%A8%8B%E5%BA%8F"><span class="toc-number">5.</span> <span class="toc-text">块设备驱动程序</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/14/xv6-%E5%85%AD/" title="xv6-六">xv6-六</a><time datetime="2022-06-14T08:39:45.000Z" title="发表于 2022-06-14 16:39:45">2022-06-14</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%8D%81/" title="linux内核学习-十">linux内核学习-十</a><time datetime="2022-06-14T02:35:57.000Z" title="发表于 2022-06-14 10:35:57">2022-06-14</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/05/26/xv6-%E4%B8%89/" title="xv6-三">xv6-三</a><time datetime="2022-05-26T01:46:10.000Z" title="发表于 2022-05-26 09:46:10">2022-05-26</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
+<h1 id="generic-block-layer"><a href="#generic-block-layer" class="headerlink" title="generic block layer"></a>generic block layer</h1><p>通用块层加工从系统向块设备发出的请求，从而向内核提供统一接口，并提高块设备的访问性能</p>
+<h2 id="struct-bio"><a href="#struct-bio" class="headerlink" title="struct bio"></a>struct bio</h2><p>通用块层的核心数据结构是位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/blk_types.h#L237">include/linux/blk_types.h</a>的<strong>struct bio</strong>描述符。其用来描述内核对块设备的一次I/O请求操作，其关键字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct bio *</td>
+<td style="text-align:center">bi_next</td>
+<td style="text-align:center">请求队列中的下一个<strong>struct bio</strong></td>
+</tr>
+<tr>
+<td style="text-align:center">struct block_device *</td>
+<td style="text-align:center">bi_bdev</td>
+<td style="text-align:center">指向操作的块设备描述符的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned short</td>
+<td style="text-align:center">bi_flags</td>
+<td style="text-align:center"><strong>struct bio</strong>的状态标志</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned short</td>
+<td style="text-align:center">bi_vcnt</td>
+<td style="text-align:center"><strong>struct bio</strong>的<strong>bio_vec</strong>数组中<strong>segment</strong>的数目</td>
+</tr>
+<tr>
+<td style="text-align:center">struct bvec_iter</td>
+<td style="text-align:center">bi_iter</td>
+<td style="text-align:center"><strong>struct bio</strong>的<strong>bio_vec</strong>数组中<strong>segment</strong>的当前迭代位置</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">bi_max_vecs</td>
+<td style="text-align:center"><strong>struct bio</strong>的<strong>bio_vec</strong>数组中允许的最大段数</td>
+</tr>
+<tr>
+<td style="text-align:center">struct bio_vec *</td>
+<td style="text-align:center">bi_io_vec</td>
+<td style="text-align:center">指向<strong>struct bio</strong>的<strong>bio_vec</strong>数组中的段</td>
+</tr>
+<tr>
+<td style="text-align:center">bio_end_io_t*</td>
+<td style="text-align:center">bi_end_io</td>
+<td style="text-align:center"><strong>struct bio</strong>的I/O操作结束时调用的函数指针</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">__bi_cnt</td>
+<td style="text-align:center"><strong>struct bio</strong>的引用计数器</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">bi_privae</td>
+<td style="text-align:center"><strong>generic block layer</strong>和<strong>块设备驱动程序</strong>的I/O完成时使用该指针</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="struct-bio-vec"><a href="#struct-bio-vec" class="headerlink" title="struct bio_vec"></a>struct bio_vec</h2><p>根据前面的分析，块设备驱动程序传送数据的基本单位是<strong>segment</strong>，因此<strong>struct bio</strong>的<strong>bio_vec</strong>数组的每一个元素描述一个<strong>segment</strong>。其元素类型是位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/bvec.h#L32">include/linux/bvec.h</a>的<strong>struct bio_vec</strong>类型，其重要字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct page *</td>
+<td style="text-align:center">bv_page</td>
+<td style="text-align:center">指向<strong>segment</strong>所在的页框的页描述符</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">bv_len</td>
+<td style="text-align:center">段的字节长度</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned int</td>
+<td style="text-align:center">bv_offset</td>
+<td style="text-align:center">页框中段数据的偏移量</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>可以看出，通过<strong>struct bio</strong>结构和其<strong>bio_vec</strong>类型的字段，其可以很好的描述内核的块设备I/O请求，并且可以方便的传递给块设备驱动程序</p>
+<h2 id="struct-gendisk"><a href="#struct-gendisk" class="headerlink" title="struct gendisk"></a>struct gendisk</h2><p>磁盘是一个由<strong>generic block layer</strong>处理的逻辑块设备，通常一个磁盘对应一个硬件块设备或一个虚拟设备。内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/genhd.h#L86">include/linux/genhd.h</a>的<strong>struct gendisk</strong>结构来描述磁盘，其重要的字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">major</td>
+<td style="text-align:center">磁盘主设备号</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">first_minor</td>
+<td style="text-align:center">与磁盘关联的第一个次设备号</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">minors</td>
+<td style="text-align:center">与磁盘关联的此设备号范围</td>
+</tr>
+<tr>
+<td style="text-align:center">char [DISK_NAME_LEN]</td>
+<td style="text-align:center">disk_name</td>
+<td style="text-align:center">磁盘的标准名称</td>
+</tr>
+<tr>
+<td style="text-align:center">struct block_device *</td>
+<td style="text-align:center">part0</td>
+<td style="text-align:center">磁盘的分区描述符</td>
+</tr>
+<tr>
+<td style="text-align:center">const struct block_device_operations *</td>
+<td style="text-align:center">fops</td>
+<td style="text-align:center">指向块设备的操作表的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct request_queue *</td>
+<td style="text-align:center">queue</td>
+<td style="text-align:center">指向磁盘请求队列的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">private_data</td>
+<td style="text-align:center">块设备驱动程序的私有数据</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">flags</td>
+<td style="text-align:center">描述磁盘类型的标志</td>
+</tr>
+<tr>
+<td style="text-align:center">struct timer_rand_state *</td>
+<td style="text-align:center">random</td>
+<td style="text-align:center">记录磁盘中断的定时；由内核内置的随机数发生器使用</td>
+</tr>
+<tr>
+<td style="text-align:center">atomic_t</td>
+<td style="text-align:center">sync_io</td>
+<td style="text-align:center">写入磁盘的扇区数计数器</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="struct-block-device"><a href="#struct-block-device" class="headerlink" title="struct block_device"></a>struct block_device</h2><p>实际上，硬盘通常被划分成几个逻辑分区。每个块设备文件要么代表整个硬盘，要么代表硬盘中的某一个分区。一般而言，硬盘中的分区是由连续的次设备号来区分。<br>如果将硬盘划分成了几个分区，那么其分区表保存在位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/blk_types.h#L40">include/linux/blk_types.h</a>的<strong>struct block_device</strong>结构的数组中，该数组存放在<strong>struct gendisk</strong>对象的<strong>part0</strong>字段中，其重要的字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">sector_t</td>
+<td style="text-align:center">bd_start_sect</td>
+<td style="text-align:center">磁盘中分区的起始扇区</td>
+</tr>
+<tr>
+<td style="text-align:center">sector_t</td>
+<td style="text-align:center">bd_nr_sectors</td>
+<td style="text-align:center">分区的扇区长度</td>
+</tr>
+<tr>
+<td style="text-align:center">bool</td>
+<td style="text-align:center">bd_read_only</td>
+<td style="text-align:center">如果分区是只读的，则设置为1，否则为0</td>
+</tr>
+<tr>
+<td style="text-align:center">u8</td>
+<td style="text-align:center">bd_partno</td>
+<td style="text-align:center">磁盘中分区的相对索引</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h1 id="I-O-scheduler-layer"><a href="#I-O-scheduler-layer" class="headerlink" title="I/O scheduler layer"></a>I/O scheduler layer</h1><p>虽然块设备驱动程序一次可以传送一个单独的扇区，但是块I/O层并不会为磁盘上每个被访问的扇区都单独执行一次I/O操作，而会尝试把几个扇区合并在一起，并作为一个整体进行处理，从而减少磁头的平均移动时间</p>
+<p>当某进程产生磁盘数据的访问时，内和组件创建块设备的请求时，块设备驱动程序将该请求加入对应的请求队列中，并将该进程挂起。然后<strong>generic block layer</strong>会异步调用<strong>I/O scheduler layer</strong>选择一个新的块设备请求或拓展一个已有的块设备请求，并激活相关的块设备驱动程序调用所谓的<strong>strategy routine</strong>处理该块设备请求</p>
+<h2 id="struct-request-queue"><a href="#struct-request-queue" class="headerlink" title="struct request_queue"></a>struct request_queue</h2><p>linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/blkdev.h#L190">include/linux/blkdev.h</a>的<strong>struct request_queue</strong>结构来描述I/O请求队列。关键字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct request *</td>
+<td style="text-align:center">last_merge</td>
+<td style="text-align:center">指向队列中首先可能合并的队列请求描述符</td>
+</tr>
+<tr>
+<td style="text-align:center">struct elevator_queue *</td>
+<td style="text-align:center">elevator</td>
+<td style="text-align:center">指向elevator对象的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">queuedata</td>
+<td style="text-align:center">指向块设备驱动程序的私有数据指针</td>
+</tr>
+<tr>
+<td style="text-align:center">unsigned long</td>
+<td style="text-align:center">queue_flags</td>
+<td style="text-align:center">描述请求队列状态的标志</td>
+</tr>
+<tr>
+<td style="text-align:center">spinlock_t</td>
+<td style="text-align:center">queue_lock</td>
+<td style="text-align:center">指向请求队列锁的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">struct list_head</td>
+<td style="text-align:center">requeue_list</td>
+<td style="text-align:center">I/O请求队列</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>可以看出，I/O请求队列是一个双向链表，其元素就是<strong>struct request</strong>(请求描述符)，被存放在<strong>struct request_queue</strong>的<strong>requeue_list</strong>字段</p>
+<h2 id="struct-request"><a href="#struct-request" class="headerlink" title="struct request"></a>struct request</h2><p>每个块设备的待处理请求都是使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/blk-mq.h#L77">include/linux/blk-mq.h</a>的<strong>struct request</strong>请求描述符描述的。其关键字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">struct request_queue *</td>
+<td style="text-align:center">q</td>
+<td style="text-align:center">I/O请求队列的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">sector_t</td>
+<td style="text-align:center">__sector</td>
+<td style="text-align:center">要传送的下一扇区号</td>
+</tr>
+<tr>
+<td style="text-align:center">struct bio *</td>
+<td style="text-align:center">bio</td>
+<td style="text-align:center">请求中第一个没有完成传送操作的bio</td>
+</tr>
+<tr>
+<td style="text-align:center">struct bio *</td>
+<td style="text-align:center">biotail</td>
+<td style="text-align:center">请求中最后一个bio</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>实际上，每个请求描述符中包含一个或多个<strong>struct bio</strong>结构。最开始，<strong>generic block layer</strong>创建一个仅包含一个<strong>struct bio</strong>结构的请求；然后I/O调度程序要么向初始的<strong>struct bio</strong>中新增加一个新段，要么将另一个<strong>struct bio</strong>链接到请求中。</p>
+<h1 id="块设备驱动程序"><a href="#块设备驱动程序" class="headerlink" title="块设备驱动程序"></a>块设备驱动程序</h1><p>块设备驱动程序时Linux块子系统中的最底层组件，其从I/O调度程序中获得请求，然后按照相关的要求处理这些请求。</p>
+<p>实际上，每个块设备驱动程序对应一个<strong>struct device_driver</strong>类型的描述符；设备驱动程序处理的每个磁盘都与一个<strong>struct device</strong>描述符相关联。</p>
+<h2 id="struct-block-device-1"><a href="#struct-block-device-1" class="headerlink" title="struct block_device"></a>struct block_device</h2><p>Linux内核使用位于<a target="_blank" rel="noopener" href="https://elixir.bootlin.com/linux/v5.17/source/include/linux/blk_types.h#L40">include/linux/blk_types.h</a>的<strong>struct block_device</strong>来描述描述块设备。其关键字段如下所示</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">类型</th>
+<th style="text-align:center">字段名称</th>
+<th style="text-align:center">描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">dev_t</td>
+<td style="text-align:center">bd_dev</td>
+<td style="text-align:center">块设备的主设备号和次设备号</td>
+</tr>
+<tr>
+<td style="text-align:center">struct inode *</td>
+<td style="text-align:center">bd_inode</td>
+<td style="text-align:center">指向bdev文件系统中块设备对应的文件索引节点的指针</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">bd_openers</td>
+<td style="text-align:center">统计块设备被打开了多少次</td>
+</tr>
+<tr>
+<td style="text-align:center">void *</td>
+<td style="text-align:center">bd_holder</td>
+<td style="text-align:center">块设备描述符的当前所有者</td>
+</tr>
+<tr>
+<td style="text-align:center">int</td>
+<td style="text-align:center">bd_holders</td>
+<td style="text-align:center">统计bd_holder字段设置的次数</td>
+</tr>
+<tr>
+<td style="text-align:center">struct gendisk *</td>
+<td style="text-align:center">bd_disk</td>
+<td style="text-align:center">指向块设备中基本磁盘的gendisk结构的指针</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="注册和初始化设备驱动程序"><a href="#注册和初始化设备驱动程序" class="headerlink" title="注册和初始化设备驱动程序"></a>注册和初始化设备驱动程序</h2><h3 id="自定义驱动程序描述符"><a href="#自定义驱动程序描述符" class="headerlink" title="自定义驱动程序描述符"></a>自定义驱动程序描述符</h3><p>首先，设备驱动程序需要自定义一个描述符，包含驱动硬件设备所需要的数据。该描述符存放每个设备的相关信息，注入操作设备时使用的I/O端口、设备发出中断的IRQ线、设备的内部状态等。</p>
+<h3 id="预定主设备号"><a href="#预定主设备号" class="headerlink" title="预定主设备号"></a>预定主设备号</h3><p>设备驱动程序必须自己预定一个主设备号。传统上，可以通过<strong>register_blkdev()</strong>函数实现</p>
+<h3 id="初始化自定义描述符"><a href="#初始化自定义描述符" class="headerlink" title="初始化自定义描述符"></a>初始化自定义描述符</h3><p>在使用驱动程序之前，必须适当地初始化前面自定义的描述符。即按照依赖关系，依次初始化自定义描述符的各个字段。</p>
+<h3 id="初始化gendisk描述符"><a href="#初始化gendisk描述符" class="headerlink" title="初始化gendisk描述符"></a>初始化gendisk描述符</h3><p>即初始化驱动程序关联的<strong>struct gendisk</strong>描述符的一些字段。</p>
+<p>将初始化的自定义描述符的地址存放到<strong>struct gendisk</strong>的<strong>private_data</strong>字段中，从而让I/O子系统可以快速的找到块设备对应的驱动程序描述符</p>
+<h3 id="分配和初始化请求队列"><a href="#分配和初始化请求队列" class="headerlink" title="分配和初始化请求队列"></a>分配和初始化请求队列</h3><p>为设备驱动程序建立一个请求队列，用于存放等待处理的请求，可以通过调用blk_init_queue等函数轻松地完成请求队列的建立</p>
+<h3 id="设置中断处理程序"><a href="#设置中断处理程序" class="headerlink" title="设置中断处理程序"></a>设置中断处理程序</h3><p>设备驱动程序还需要为设备注册IRQ线，可以通过调用request_irq函数完成操作</p>
+<h3 id="注册磁盘"><a href="#注册磁盘" class="headerlink" title="注册磁盘"></a>注册磁盘</h3><p>最后，当设备驱动程序的所有数据结构已经准备好，则初始化阶段的最后一步就是注册和激活磁盘可以简单的通过调用add_disk函数完成</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.gitee.io/2022/06/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%8D%81/">https://jiaweihawk.gitee.io/2022/06/14/linux内核学习-十/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.gitee.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2022/06/11/xv6-%E4%BA%94/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">xv6-五</div></div></a></div><div class="next-post pull-right"><a href="/2022/06/14/xv6-%E5%85%AD/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">xv6-六</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2022/04/26/linux内核学习-七/" title="linux内核学习-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-26</div><div class="title">linux内核学习-七</div></div></a></div><div><a href="/2022/05/11/linux内核学习-九/" title="linux内核学习-九"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-11</div><div class="title">linux内核学习-九</div></div></a></div><div><a href="/2022/03/07/linux内核学习-三/" title="linux内核学习-三"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-03-07</div><div class="title">linux内核学习-三</div></div></a></div><div><a href="/2022/02/27/linux内核学习-二/" title="linux内核学习-二"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-02-27</div><div class="title">linux内核学习-二</div></div></a></div><div><a href="/2022/04/01/linux内核学习-五/" title="linux内核学习-五"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-01</div><div class="title">linux内核学习-五</div></div></a></div><div><a href="/2022/04/28/linux内核学习-八/" title="linux内核学习-八"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-04-28</div><div class="title">linux内核学习-八</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">44</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://gitee.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%9D%97%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">块设备模型</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#sector"><span class="toc-number">2.1.</span> <span class="toc-text">sector</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#block"><span class="toc-number">2.2.</span> <span class="toc-text">block</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#segment"><span class="toc-number">2.3.</span> <span class="toc-text">segment</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#generic-block-layer"><span class="toc-number">3.</span> <span class="toc-text">generic block layer</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-bio"><span class="toc-number">3.1.</span> <span class="toc-text">struct bio</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-bio-vec"><span class="toc-number">3.2.</span> <span class="toc-text">struct bio_vec</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-gendisk"><span class="toc-number">3.3.</span> <span class="toc-text">struct gendisk</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-block-device"><span class="toc-number">3.4.</span> <span class="toc-text">struct block_device</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#I-O-scheduler-layer"><span class="toc-number">4.</span> <span class="toc-text">I&#x2F;O scheduler layer</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-request-queue"><span class="toc-number">4.1.</span> <span class="toc-text">struct request_queue</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-request"><span class="toc-number">4.2.</span> <span class="toc-text">struct request</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%9D%97%E8%AE%BE%E5%A4%87%E9%A9%B1%E5%8A%A8%E7%A8%8B%E5%BA%8F"><span class="toc-number">5.</span> <span class="toc-text">块设备驱动程序</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#struct-block-device-1"><span class="toc-number">5.1.</span> <span class="toc-text">struct block_device</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B3%A8%E5%86%8C%E5%92%8C%E5%88%9D%E5%A7%8B%E5%8C%96%E8%AE%BE%E5%A4%87%E9%A9%B1%E5%8A%A8%E7%A8%8B%E5%BA%8F"><span class="toc-number">5.2.</span> <span class="toc-text">注册和初始化设备驱动程序</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E9%A9%B1%E5%8A%A8%E7%A8%8B%E5%BA%8F%E6%8F%8F%E8%BF%B0%E7%AC%A6"><span class="toc-number">5.2.1.</span> <span class="toc-text">自定义驱动程序描述符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%84%E5%AE%9A%E4%B8%BB%E8%AE%BE%E5%A4%87%E5%8F%B7"><span class="toc-number">5.2.2.</span> <span class="toc-text">预定主设备号</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8F%8F%E8%BF%B0%E7%AC%A6"><span class="toc-number">5.2.3.</span> <span class="toc-text">初始化自定义描述符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96gendisk%E6%8F%8F%E8%BF%B0%E7%AC%A6"><span class="toc-number">5.2.4.</span> <span class="toc-text">初始化gendisk描述符</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E9%85%8D%E5%92%8C%E5%88%9D%E5%A7%8B%E5%8C%96%E8%AF%B7%E6%B1%82%E9%98%9F%E5%88%97"><span class="toc-number">5.2.5.</span> <span class="toc-text">分配和初始化请求队列</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%BE%E7%BD%AE%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86%E7%A8%8B%E5%BA%8F"><span class="toc-number">5.2.6.</span> <span class="toc-text">设置中断处理程序</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B3%A8%E5%86%8C%E7%A3%81%E7%9B%98"><span class="toc-number">5.2.7.</span> <span class="toc-text">注册磁盘</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/07/04/xv6-%E4%B8%83/" title="xv6-七">xv6-七</a><time datetime="2022-07-04T14:22:43.000Z" title="发表于 2022-07-04 22:22:43">2022-07-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/14/xv6-%E5%85%AD/" title="xv6-六">xv6-六</a><time datetime="2022-06-14T08:39:45.000Z" title="发表于 2022-06-14 16:39:45">2022-06-14</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/14/linux%E5%86%85%E6%A0%B8%E5%AD%A6%E4%B9%A0-%E5%8D%81/" title="linux内核学习-十">linux内核学习-十</a><time datetime="2022-06-14T02:35:57.000Z" title="发表于 2022-06-14 10:35:57">2022-06-14</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/11/xv6-%E4%BA%94/" title="xv6-五">xv6-五</a><time datetime="2022-06-11T12:14:03.000Z" title="发表于 2022-06-11 20:14:03">2022-06-11</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2022/06/07/xv6-%E5%9B%9B/" title="xv6-四">xv6-四</a><time datetime="2022-06-07T07:59:34.000Z" title="发表于 2022-06-07 15:59:34">2022-06-07</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2022 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
   window.MathJax = {
     loader: {
       source: {
