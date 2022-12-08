@@ -446,7 +446,7 @@ passwd=
 ```
 
 ```bash
-mkdir ~/.ssh && unzip -P ${passwd} ssh.zip -d ~/.ssh
+mkdir -p ~/.ssh && unzip -P ${passwd} ssh.zip -d ~/.ssh
 ```
 
 

@@ -114,8 +114,8 @@ kramed:
 ## Docs: https://hexo.io/docs/one-command-deployment
 deploy:
 - type: 'git'
-  repo: git@gitee.com:jiaweihawk/jiaweihawk.git 
+  repo: git@github.com:JiaweiHawk/jiaweihawk.github.io.git
   branch: "deploy"
 - type: 'git'
-  repo: git@github.com:JiaweiHawk/jiaweihawk.github.io.git
+  repo: git@gitee.com:jiaweihawk/jiaweihawk.git
   branch: "deploy"
