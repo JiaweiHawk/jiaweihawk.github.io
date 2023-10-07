@@ -421,7 +421,7 @@ sudo pacman -S git
 
 在konsole中执行如下bash命令，其中相关的参数填写git的系统设置即可
 ```bash
-git config --global user.name "hawk" && git config --global user.email 18801353760@163.com && git config --global core.editor vi
+git config --global user.name "hawk" && git config --global user.email 18801353760@163.com && git config --global core.quotepath false && git config --global core.editor vi
 ```
 
 ### 导出公、私钥
