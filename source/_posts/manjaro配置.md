@@ -430,7 +430,7 @@ git config --global user.name "hawk" && git config --global user.email 188013537
 
 这里将公、私钥进行压缩，并进行加密处理，在konsole中执行如下bash命令
 ```bash
-passwd=
+read -s -p "Password: " passwd
 ```
 
 ```bash
