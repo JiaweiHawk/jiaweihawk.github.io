@@ -442,7 +442,7 @@ rm -rf ssh.zip && zip -P ${passwd} ssh.zip -jr ~/.ssh
 即导入上述导出的公、私钥，这里给出我自己的加密后的[公、私钥](ssh.zip)
 然后对文件首先进行解密处理，最后解压缩即可，在konsole中执行如下bash命令
 ```bash
-passwd=
+read -s -p "Password: " passwd
 ```
 
 ```bash
