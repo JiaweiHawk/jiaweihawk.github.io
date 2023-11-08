@@ -160,8 +160,7 @@ EOF
 sudo usermod -aG docker ${USER}
 
 # neovim
-sudo ln -sf /usr/bin/nvim /usr/bin/vi \
-    && mkdir ~/.config/nvim \
+mkdir ~/.config/nvim \
     && cat > ~/.config/nvim/init.vim <<EOF
 set clipboard+=unnamedplus
 set nu
@@ -243,8 +242,7 @@ EOF
 sudo usermod -aG docker ${USER}
 
 # neovim
-sudo ln -sf /usr/bin/nvim /usr/bin/vi \
-    && mkdir ~/.config/nvim \
+mkdir ~/.config/nvim \
     && cat > ~/.config/nvim/init.vim <<EOF
 set nu
 set tabstop=4
@@ -325,8 +323,7 @@ EOF
 sudo usermod -aG docker ${USER}
 
 # neovim
-sudo ln -sf /usr/bin/nvim /usr/bin/vi \
-    && mkdir ~/.config/nvim \
+mkdir ~/.config/nvim \
     && cat > ~/.config/nvim/init.vim <<EOF
 set nu
 set tabstop=4
