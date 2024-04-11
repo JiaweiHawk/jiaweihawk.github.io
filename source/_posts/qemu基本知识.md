@@ -171,6 +171,8 @@ struct PCIDevice {
 };
 ```
 
+## ~~属性~~
+
 ## 初始化
 
 ### 类的初始化
@@ -381,7 +383,79 @@ struct PCIDevice {
     ```
     **type_initialize()**首先填充**struct TypeImpl**和**Class**结构体相关的字段，此时**struct TypeImpl**才完整的包含了类的所有信息。之后初始化所有父类的**Class**结构体，并依次调用所有父类的**class_base_init()**和自己的**class_init()**从而最终完成类的初始化。
 
-### ~~对象初始化~~
+### 对象初始化
+
+根据[前面章节](#对象)的介绍，**QOM**使用**Object**结构体来描述对象，则对象的初始化也就是该数据结构的初始化。
+**QOM**根据对象的类名称调用**type_table_lookup()**获取类对应的**struct TypeImpl**，然后使用[**object_initialize_with_type()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L520)来创建并初始化一个对象实例，如下所示
+
+```c
+/*
+ * #0  object_init_with_type (obj=0x5555574030d0, ti=0x5555570997c0) at ../../qemu/qom/object.c:424
+ * #1  0x0000555555e9e95c in object_init_with_type (obj=0x5555574030d0, ti=0x55555709c960) at ../../qemu/qom/object.c:425
+ * #2  0x0000555555e9ef40 in object_initialize_with_type (obj=0x5555574030d0, size=17776, type=0x55555709c960) at ../../qemu/qom/object.c:571
+ * #3  0x0000555555e9f70f in object_new_with_type (type=0x55555709c960) at ../../qemu/qom/object.c:791
+ * #4  0x0000555555e9f77b in object_new (typename=0x5555573cd3b0 "i440FX") at ../../qemu/qom/object.c:806
+ * #5  0x0000555555e96faa in qdev_new (name=0x5555573cd3b0 "i440FX") at ../../qemu/hw/core/qdev.c:166
+ * #6  0x0000555555a9999f in pci_new_internal (devfn=0, multifunction=false, name=0x5555573cd3b0 "i440FX") at ../../qemu/hw/pci/pci.c:2168
+ * #7  0x0000555555a99a40 in pci_new (devfn=0, name=0x5555573cd3b0 "i440FX") at ../../qemu/hw/pci/pci.c:2181
+ * #8  0x0000555555a99afd in pci_create_simple (bus=0x555557402480, devfn=0, name=0x5555573cd3b0 "i440FX") at ../../qemu/hw/pci/pci.c:2199
+ * #9  0x0000555555ab5ec0 in i440fx_pcihost_realize (dev=0x5555573cc050, errp=0x7fffffffd520) at ../../qemu/hw/pci-host/i440fx.c:274
+ * #10 0x0000555555e97d8e in device_set_realized (obj=0x5555573cc050, value=true, errp=0x7fffffffd630) at ../../qemu/hw/core/qdev.c:510
+ * #11 0x0000555555ea3595 in property_set_bool (obj=0x5555573cc050, v=0x5555573cd550, name=0x5555562f4071 "realized", opaque=0x5555570edd00, errp=0x7fffffffd630) at ../../qemu/qom/object.c:2358
+ * #12 0x0000555555ea112b in object_property_set (obj=0x5555573cc050, name=0x5555562f4071 "realized", v=0x5555573cd550, errp=0x7fffffffd630) at ../../qemu/qom/object.c:1472
+ * #13 0x0000555555ea5d64 in object_property_set_qobject (obj=0x5555573cc050, name=0x5555562f4071 "realized", value=0x5555573cd270, errp=0x55555705bca0 <error_fatal>) at ../../qemu/qom/qom-qobject.c:28
+ * #14 0x0000555555ea14e4 in object_property_set_bool (obj=0x5555573cc050, name=0x5555562f4071 "realized", value=true, errp=0x55555705bca0 <error_fatal>) at ../../qemu/qom/object.c:1541
+ * #15 0x0000555555e974a8 in qdev_realize (dev=0x5555573cc050, bus=0x55555735df80, errp=0x55555705bca0 <error_fatal>) at ../../qemu/hw/core/qdev.c:292
+ * #16 0x0000555555e974e1 in qdev_realize_and_unref (dev=0x5555573cc050, bus=0x55555735df80, errp=0x55555705bca0 <error_fatal>) at ../../qemu/hw/core/qdev.c:299
+ * #17 0x00005555559658fa in sysbus_realize_and_unref (dev=0x5555573cc050, errp=0x55555705bca0 <error_fatal>) at ../../qemu/hw/core/sysbus.c:261
+ * #18 0x0000555555cae1c5 in pc_init1 (machine=0x555557355400, pci_type=0x5555562a5bbb "i440FX") at ../../qemu/hw/i386/pc_piix.c:212
+ * #19 0x0000555555caee7d in pc_init_v9_0 (machine=0x555557355400) at ../../qemu/hw/i386/pc_piix.c:523
+ * #20 0x000055555595e63e in machine_run_board_init (machine=0x555557355400, mem_path=0x0, errp=0x7fffffffd910) at ../../qemu/hw/core/machine.c:1547
+ * #21 0x0000555555bda9d6 in qemu_init_board () at ../../qemu/system/vl.c:2613
+ * #22 0x0000555555bdace5 in qmp_x_exit_preconfig (errp=0x55555705bca0 <error_fatal>) at ../../qemu/system/vl.c:2705
+ * #23 0x0000555555bdd6a2 in qemu_init (argc=29, argv=0x7fffffffdc48) at ../../qemu/system/vl.c:3739
+ * #24 0x0000555555e9282d in main (argc=29, argv=0x7fffffffdc48) at ../../qemu/system/main.c:47
+ * #25 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e92809 <main>, argc=argc@entry=29, argv=argv@entry=0x7fffffffdc48) at ../sysdeps/nptl/libc_start_call_main.h:58
+ * #26 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e92809 <main>, argc=29, argv=0x7fffffffdc48, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdc38) at ../csu/libc-start.c:392
+ * #27 0x000055555586ba15 in _start ()
+ */
+static void object_initialize_with_type(Object *obj, size_t size, TypeImpl *type)
+{
+    type_initialize(type);
+    ...
+    memset(obj, 0, type->instance_size);
+    obj->class = type->class;
+    object_ref(obj);
+    object_class_property_init_all(obj);
+    obj->properties = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                            NULL, object_property_free);
+    object_init_with_type(obj, type);
+    object_post_init_with_type(obj, type);
+}
+
+static void object_init_with_type(Object *obj, TypeImpl *ti)
+{
+    if (type_has_parent(ti)) {
+        object_init_with_type(obj, type_get_parent(ti));
+    }
+
+    if (ti->instance_init) {
+        ti->instance_init(obj);
+    }
+}
+
+static void object_post_init_with_type(Object *obj, TypeImpl *ti)
+{
+    if (ti->instance_post_init) {
+        ti->instance_post_init(obj);
+    }
+
+    if (type_has_parent(ti)) {
+        object_post_init_with_type(obj, type_get_parent(ti));
+    }
+}
+```
+**object_initialize_with_type()**首先调用**type_initialize()**确保类被初始化，然后调用**object_init_with_type()**和**objet_post_init_with_type()**，从而递归调用对象和对象所有父类的对象初始化相关函数。
 
 # 参考
 
