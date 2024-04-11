@@ -171,7 +171,217 @@ struct PCIDevice {
 };
 ```
 
-## ~~初始化~~
+## 初始化
+
+### 类的初始化
+
+根据[前面章节](#类)的介绍，**QOM**使用**struct TypeInfo**和**Class**结构体共同来描述类，类的初始化也就是这两个数据的初始化，包括如下几个步骤
+
+- 注册类
+
+    **QOM**使用[**type_init**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/module.h#L56)宏注册类信息，如下所示
+
+    ```c
+    /*
+     * #0  register_module_init (fn=0x555555a9b5a8 <pci_register_types>, type=MODULE_INIT_QOM) at ../../qemu/util/module.c:75
+     * #1  0x0000555555a9b63c in do_qemu_init_pci_register_types () at ../../qemu/hw/pci/pci.c:2851
+     * #2  0x00007ffff7829ebb in call_init (env=<optimized out>, argv=0x7fffffffdc58, argc=29) at ../csu/libc-start.c:145
+     * #3  __libc_start_main_impl (main=0x555555e92809 <main>, argc=29, argv=0x7fffffffdc58, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdc48) at ../csu/libc-start.c:379
+     * #4  0x000055555586ba15 in _start ()
+     */
+    #define type_init(function) module_init(function, MODULE_INIT_QOM)
+
+    /* This should not be used directly.  Use block_init etc. instead.  */
+    #define module_init(function, type)                                         \
+    static void __attribute__((constructor)) do_qemu_init_ ## function(void)    \
+    {                                                                           \
+        register_module_init(function, type);                                   \
+    }
+
+    void register_module_init(void (*fn)(void), module_init_type type)
+    {
+        ModuleEntry *e;
+        ModuleTypeList *l;
+
+        e = g_malloc0(sizeof(*e));
+        e->init = fn;
+        e->type = type;
+
+        l = find_type(type);
+
+        QTAILQ_INSERT_TAIL(l, e, node);
+    }
+
+    static const TypeInfo pci_device_type_info = {
+        .name = TYPE_PCI_DEVICE,
+        .parent = TYPE_DEVICE,
+        .instance_size = sizeof(PCIDevice),
+        .abstract = true,
+        .class_size = sizeof(PCIDeviceClass),
+        .class_init = pci_device_class_init,
+        .class_base_init = pci_device_class_base_init,
+    };
+
+    static void pci_register_types(void)
+    {
+        ...
+        type_register_static(&pci_device_type_info);
+    }
+
+    type_init(pci_register_types)
+    ```
+
+    可以看到，**QOM**通过`__attribute((constructor))`标记让`do_qemu_init_X()`函数在`main()`函数之前运行。而`do_qemu_init_X()`函数是将用户自定义函数(这里是`pci_register_types()`函数)插入到`init_type_list[MODULE_INIT_QOM]`链表上
+
+- 生成**struct TypeImpl**
+
+    在`main()`中，`init_type_list[MODULE_INIT_QOM]`链表上所有的之前插入的用户自定义函数都会在[**module_call_init()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/module.c#L97)中执行，调用栈如下所示
+    ```c
+    /*
+     * #0  type_register_static (info=0x555556ea5540 <pci_device_type_info>) at ../../qemu/qom/object.c:195
+     * #1  0x0000555555a9b619 in pci_register_types () at ../../qemu/hw/pci/pci.c:2848
+     * #2  0x00005555560b0d54 in module_call_init (type=MODULE_INIT_QOM) at ../../qemu/util/module.c:109
+     * #3  0x0000555555bd3ce4 in qemu_init_subsystems () at ../../qemu/system/runstate.c:818
+     * #4  0x0000555555bdb08b in qemu_init (argc=29, argv=0x7fffffffdc58) at ../../qemu/system/vl.c:2786
+     * #5  0x0000555555e9282d in main (argc=29, argv=0x7fffffffdc58) at ../../qemu/system/main.c:47
+     * #6  0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e92809 <main>, argc=argc@entry=29, argv=argv@entry=0x7fffffffdc58) at ../sysdeps/nptl/libc_start_call_main.h:58
+     * #7  0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e92809 <main>, argc=29, argv=0x7fffffffdc58, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdc48) at ../csu/libc-start.c:392
+     * #8  0x000055555586ba15 in _start ()
+     */
+    ```
+
+    用户自定义函数通过[**type_register_static()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L156)生成[**struct TypeImpl**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L49)数据，并将其插入到一个全局**GHashTable**中，如下所示。随后可以通过类的名称调用[**type_table_lookup**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L99)获取**struct TypeImpl**数据，**struct TypeImpl**数据包含了**struct TypeInfo**数据和**Class**结构体数据(此时还未初始化)，也就是类的全部信息。
+    ```c
+    /*
+     * #0  type_register_internal (info=0x555556ea5540 <pci_device_type_info>) at ../../qemu/qom/object.c:176
+     * #1  0x0000555555e9df0a in type_register (info=0x555556ea5540 <pci_device_type_info>) at ../../qemu/qom/object.c:190
+     * #2  0x0000555555e9df30 in type_register_static (info=0x555556ea5540 <pci_device_type_info>) at ../../qemu/qom/object.c:195
+     * #3  0x0000555555a9b619 in pci_register_types () at ../../qemu/hw/pci/pci.c:2848
+     * #4  0x00005555560b0d54 in module_call_init (type=MODULE_INIT_QOM) at ../../qemu/util/module.c:109
+     * #5  0x0000555555bd3ce4 in qemu_init_subsystems () at ../../qemu/system/runstate.c:818
+     * #6  0x0000555555bdb08b in qemu_init (argc=29, argv=0x7fffffffdc58) at ../../qemu/system/vl.c:2786
+     * #7  0x0000555555e9282d in main (argc=29, argv=0x7fffffffdc58) at ../../qemu/system/main.c:47
+     * #8  0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e92809 <main>, argc=argc@entry=29, argv=argv@entry=0x7fffffffdc58) at ../sysdeps/nptl/libc_start_call_main.h:58
+     * #9  0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e92809 <main>, argc=29, argv=0x7fffffffdc58, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdc48) at ../csu/libc-start.c:392
+     * #10 0x000055555586ba15 in _start ()
+     */
+    static TypeImpl *type_register_internal(const TypeInfo *info)
+    {
+        TypeImpl *ti;
+
+        if (!type_name_is_valid(info->name)) {
+            fprintf(stderr, "Registering '%s' with illegal type name\n", info->name);
+            abort();
+        }
+
+        ti = type_new(info);
+
+        type_table_add(ti);
+        return ti;
+    }
+
+    static void type_table_add(TypeImpl *ti)
+    {
+        assert(!enumerating_types);
+        g_hash_table_insert(type_table_get(), (void *)ti->name, ti);
+    }
+
+    static GHashTable *type_table_get(void)
+    {
+        static GHashTable *type_table;
+
+        if (type_table == NULL) {
+            type_table = g_hash_table_new(g_str_hash, g_str_equal);
+        }
+
+    return type_table;
+    }
+
+    struct TypeImpl
+    {
+        const char *name;
+
+        size_t class_size;
+
+        size_t instance_size;
+        size_t instance_align;
+
+        void (*class_init)(ObjectClass *klass, void *data);
+        void (*class_base_init)(ObjectClass *klass, void *data);
+
+        void *class_data;
+
+        void (*instance_init)(Object *obj);
+        void (*instance_post_init)(Object *obj);
+        void (*instance_finalize)(Object *obj);
+
+        bool abstract;
+
+        const char *parent;
+        TypeImpl *parent_type;
+
+        ObjectClass *class;
+
+        int num_interfaces;
+        InterfaceImpl interfaces[MAX_INTERFACES];
+    };
+    ```
+
+- 初始化**Class**结构体
+    这里初始化类的最后一部分数据，即**Class**结构体。其往往在生成**struct TypeImpl**之后且对象初始化之前通过[**type_initialize()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L300)进行，如下所示
+    ```c
+    /*
+     * #0  pci_device_class_init (klass=0x555557108080, data=0x0) at ../../qemu/hw/pci/pci.c:2630
+     * #1  0x0000555555e9e904 in type_initialize (ti=0x5555570997c0) at ../../qemu/qom/object.c:418
+     * #2  0x0000555555e9e65d in type_initialize (ti=0x555557091ba0) at ../../qemu/qom/object.c:366
+     * #3  0x0000555555e9e65d in type_initialize (ti=0x555557091f60) at ../../qemu/qom/object.c:366
+     * #4  0x0000555555ea02b7 in object_class_foreach_tramp (key=0x5555570920e0, value=0x555557091f60, opaque=0x7fffffffd8a0) at ../../qemu/qom/object.c:1133
+     * #5  0x00007ffff7b9d6b8 in g_hash_table_foreach () at /lib/x86_64-linux-gnu/libglib-2.0.so.0
+     * #6  0x0000555555ea03a7 in object_class_foreach (fn=0x555555ea0532 <object_class_get_list_tramp>, implements_type=0x555556274512 "machine", include_abstract=false, opaque=0x7fffffffd8f0) at ../../qemu/qom/object.c:1155
+     * #7  0x0000555555ea05c0 in object_class_get_list (implements_type=0x555556274512 "machine", include_abstract=false) at ../../qemu/qom/object.c:1212
+     * #8  0x0000555555bd8192 in select_machine (qdict=0x5555570e5ce0, errp=0x55555705bca0 <error_fatal>) at ../../qemu/system/vl.c:1661
+     * #9  0x0000555555bd935b in qemu_create_machine (qdict=0x5555570e5ce0) at ../../qemu/system/vl.c:2101
+     * #10 0x0000555555bdd50f in qemu_init (argc=29, argv=0x7fffffffdc58) at ../../qemu/system/vl.c:3664
+     * #11 0x0000555555e9282d in main (argc=29, argv=0x7fffffffdc58) at ../../qemu/system/main.c:47
+     * #12 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e92809 <main>, argc=argc@entry=29, argv=argv@entry=0x7fffffffdc58) at ../sysdeps/nptl/libc_start_call_main.h:58
+     * #13 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e92809 <main>, argc=29, argv=0x7fffffffdc58, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdc48) at ../csu/libc-start.c:392
+     * #14 0x000055555586ba15 in _start ()
+     */
+    static void type_initialize(TypeImpl *ti)
+    {
+        TypeImpl *parent;
+        if (ti->class) {
+            return;
+        }
+        ...
+        ti->class = g_malloc0(ti->class_size);
+
+        parent = type_get_parent(ti);
+        if (parent) {
+            type_initialize(parent);
+            memcpy(ti->class, parent->class, parent->class_size);
+            ...
+        }
+
+        ti->class->properties = g_hash_table_new_full(g_str_hash, g_str_equal, NULL,
+                                                      object_property_free);
+        ti->class->type = ti;
+
+        while (parent) {
+            if (parent->class_base_init) {
+                parent->class_base_init(ti->class, ti->class_data);
+            }
+            parent = type_get_parent(parent);
+        }
+
+        if (ti->class_init) {
+            ti->class_init(ti->class, ti->class_data);
+        }
+    }
+    ```
+    **type_initialize()**首先填充**struct TypeImpl**和**Class**结构体相关的字段，此时**struct TypeImpl**才完整的包含了类的所有信息。之后初始化所有父类的**Class**结构体，并依次调用所有父类的**class_base_init()**和自己的**class_init()**从而最终完成类的初始化。
+
+### ~~对象初始化~~
 
 # 参考
 
