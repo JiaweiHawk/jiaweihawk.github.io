@@ -171,8 +171,6 @@ struct PCIDevice {
 };
 ```
 
-## ~~属性~~
-
 ## 初始化
 
 ### 类的初始化
@@ -457,6 +455,211 @@ static void object_post_init_with_type(Object *obj, TypeImpl *ti)
 ```
 **object_initialize_with_type()**首先调用**type_initialize()**确保类被初始化，然后调用**object_init_with_type()**和**objet_post_init_with_type()**，从而递归调用对象和对象所有父类的对象初始化相关函数。
 
+## 属性
+类似于linux中的sysfs，考虑到**QOM**的每个类的**Class**结构体基类是[**struct ObjectClass**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L127)，每个对象的**Object**结构体基类是[**Object**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L153)，为了提供一套类和对象的公用对外接口，**QOM**为**struct ObjectClass**和**struct Object**添加了**properties**域，即属性名称到[**struct ObjectProperty**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L88)的哈希表，如下所示
+```c
+struct ObjectProperty
+{
+    char *name;
+    char *type;
+    char *description;
+    ObjectPropertyAccessor *get;
+    ObjectPropertyAccessor *set;
+    ObjectPropertyResolve *resolve;
+    ObjectPropertyRelease *release;
+    ObjectPropertyInit *init;
+    void *opaque;
+    QObject *defval;
+};
+
+/**
+ * typedef ObjectPropertyAccessor:
+ * @obj: the object that owns the property
+ * @v: the visitor that contains the property data
+ * @name: the name of the property
+ * @opaque: the object property opaque
+ * @errp: a pointer to an Error that is filled if getting/setting fails.
+ *
+ * Called when trying to get/set a property.
+ */
+typedef void (ObjectPropertyAccessor)(Object *obj,
+                                      Visitor *v,
+                                      const char *name,
+                                      void *opaque,
+                                      Error **errp);
+
+/**
+ * typedef ObjectPropertyResolve:
+ * @obj: the object that owns the property
+ * @opaque: the opaque registered with the property
+ * @part: the name of the property
+ *
+ * Resolves the #Object corresponding to property @part.
+ *
+ * The returned object can also be used as a starting point
+ * to resolve a relative path starting with "@part".
+ *
+ * Returns: If @path is the path that led to @obj, the function
+ * returns the #Object corresponding to "@path/@part".
+ * If "@path/@part" is not a valid object path, it returns #NULL.
+ */
+typedef Object *(ObjectPropertyResolve)(Object *obj,
+                                        void *opaque,
+                                        const char *part);
+
+/**
+ * typedef ObjectPropertyRelease:
+ * @obj: the object that owns the property
+ * @name: the name of the property
+ * @opaque: the opaque registered with the property
+ *
+ * Called when a property is removed from a object.
+ */
+typedef void (ObjectPropertyRelease)(Object *obj,
+                                     const char *name,
+                                     void *opaque);
+```
+其中，`name`表示属性的名称，`type`表示属性的类型，而`opaque`指向一个属性的具体类型的结构体信息，如下图所示
+```
+┌────────────────┐
+│                │
+│                │
+├────────────────┤
+│  properties    ├───────────────┬──────────────────────────────────────►
+├────────────────┤               │
+│                │               │
+│                │        ┌──────▼──────┐
+└────────────────┘        │    name     │
+struct ObjectClass        ├─────────────┤
+                          │    type     ├─────────►"bool"
+                          ├─────────────┤
+                          │    ...      │
+                          ├─────────────┤
+                          │    opaque   ├─────────►┌──────────┐
+                          └─────────────┘          │          │
+                       struct ObjectProperty       └──────────┘
+                                               struct BoolProperty
+```
+
+**QOM**分别使用[**object_class_property_find()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1362)、[**object_class_property_add()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1284)和[**object_property_find()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1311)、[**object_property_add()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1273)来查找和设置这些属性，如下所示
+```c
+ObjectProperty *object_class_property_find(ObjectClass *klass, const char *name)
+{
+    ObjectClass *parent_klass;
+
+    parent_klass = object_class_get_parent(klass);
+    if (parent_klass) {
+        ObjectProperty *prop =
+            object_class_property_find(parent_klass, name);
+        if (prop) {
+            return prop;
+        }
+    }
+
+    return g_hash_table_lookup(klass->properties, name);
+}
+
+ObjectProperty *
+object_class_property_add(ObjectClass *klass,
+                          const char *name,
+                          const char *type,
+                          ObjectPropertyAccessor *get,
+                          ObjectPropertyAccessor *set,
+                          ObjectPropertyRelease *release,
+                          void *opaque)
+{
+    ObjectProperty *prop;
+
+    assert(!object_class_property_find(klass, name));
+
+    prop = g_malloc0(sizeof(*prop));
+
+    prop->name = g_strdup(name);
+    prop->type = g_strdup(type);
+
+    prop->get = get;
+    prop->set = set;
+    prop->release = release;
+    prop->opaque = opaque;
+
+    g_hash_table_insert(klass->properties, prop->name, prop);
+
+    return prop;
+}
+
+ObjectProperty *object_property_find(Object *obj, const char *name)
+{
+    ObjectProperty *prop;
+    ObjectClass *klass = object_get_class(obj);
+
+    prop = object_class_property_find(klass, name);
+    if (prop) {
+        return prop;
+    }
+
+    return g_hash_table_lookup(obj->properties, name);
+}
+
+bool object_property_set(Object *obj, const char *name, Visitor *v,
+                         Error **errp)
+{
+    ERRP_GUARD();
+    ObjectProperty *prop = object_property_find_err(obj, name, errp);
+
+    if (prop == NULL) {
+        return false;
+    }
+
+    if (!prop->set) {
+        error_setg(errp, "Property '%s.%s' is not writable",
+                   object_get_typename(obj), name);
+        return false;
+    }
+    prop->set(obj, v, name, prop->opaque, errp);
+    return !*errp;
+}
+
+ObjectProperty *
+object_property_add(Object *obj, const char *name, const char *type,
+                    ObjectPropertyAccessor *get,
+                    ObjectPropertyAccessor *set,
+                    ObjectPropertyRelease *release,
+                    void *opaque)
+{
+    return object_property_try_add(obj, name, type, get, set, release,
+                                   opaque, &error_abort);
+}
+
+ObjectProperty *
+object_property_try_add(Object *obj, const char *name, const char *type,
+                        ObjectPropertyAccessor *get,
+                        ObjectPropertyAccessor *set,
+                        ObjectPropertyRelease *release,
+                        void *opaque, Error **errp)
+{
+    ObjectProperty *prop;
+    ...
+    if (object_property_find(obj, name) != NULL) {
+        error_setg(errp, "attempt to add duplicate property '%s' to object (type '%s')",
+                   name, object_get_typename(obj));
+        return NULL;
+    }
+
+    prop = g_malloc0(sizeof(*prop));
+
+    prop->name = g_strdup(name);
+    prop->type = g_strdup(type);
+
+    prop->get = get;
+    prop->set = set;
+    prop->release = release;
+    prop->opaque = opaque;
+
+    g_hash_table_insert(obj->properties, prop->name, prop);
+    return prop;
+}
+```
+
 # 参考
 
 - [The QEMU Object Model (QOM)](https://qemu-project.gitlab.io/qemu/devel/qom.html)
@@ -467,3 +670,5 @@ static void object_post_init_with_type(Object *obj, TypeImpl *ti)
 - [QEMU's instance_init() vs. realize()](https://people.redhat.com/~thuth/blog/qemu/2018/09/10/instance-init-realize.html)
 - [QEMU(1) - QOM](https://blog.csdn.net/lwhuq/article/details/98642184)
 - [浅谈QEMU的对象系统 ](https://juejin.cn/post/6844903845550620685)
+- [QOM Property](https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2018/09/05/qom-property)
+- [QOM exegesis and apocalypse](https://www.linux-kvm.org/images/9/90/Kvmforum14-qom.pdf)
