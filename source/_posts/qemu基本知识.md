@@ -455,6 +455,275 @@ static void object_post_init_with_type(Object *obj, TypeImpl *ti)
 ```
 **object_initialize_with_type()**首先调用**type_initialize()**确保类被初始化，然后调用**object_init_with_type()**和**objet_post_init_with_type()**，从而递归调用对象和对象所有父类的对象初始化相关函数。
 
+## 类型转换
+
+**QOM**同样实现了面向对象编程中的cast概念。根据[类](#类)和[对象](#对象)章节的介绍，相关结构体在起始偏移处存放了父类的结构体，因此向上转型始终是安全的；而为了实现向下转型，**QOM**通过[**OBJECT_DECLARE_TYPE()**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L233)宏声明了诸多的helper函数，如下所示
+
+```c
+/**
+ * OBJECT_DECLARE_TYPE:
+ * @InstanceType: instance struct name
+ * @ClassType: class struct name
+ * @MODULE_OBJ_NAME: the object name in uppercase with underscore separators
+ *
+ * This macro is typically used in a header file, and will:
+ *
+ *   - create the typedefs for the object and class structs
+ *   - register the type for use with g_autoptr
+ *   - provide three standard type cast functions
+ *
+ * The object struct and class struct need to be declared manually.
+ */
+#define OBJECT_DECLARE_TYPE(InstanceType, ClassType, MODULE_OBJ_NAME) \
+    typedef struct InstanceType InstanceType; \
+    typedef struct ClassType ClassType; \
+    ... \
+    DECLARE_OBJ_CHECKERS(InstanceType, ClassType, \
+                         MODULE_OBJ_NAME, TYPE_##MODULE_OBJ_NAME)
+
+/**
+ * DECLARE_OBJ_CHECKERS:
+ * @InstanceType: instance struct name
+ * @ClassType: class struct name
+ * @OBJ_NAME: the object name in uppercase with underscore separators
+ * @TYPENAME: type name
+ *
+ * Direct usage of this macro should be avoided, and the complete
+ * OBJECT_DECLARE_TYPE macro is recommended instead.
+ *
+ * This macro will provide the three standard type cast functions for a
+ * QOM type.
+ */
+#define DECLARE_OBJ_CHECKERS(InstanceType, ClassType, OBJ_NAME, TYPENAME) \
+    DECLARE_INSTANCE_CHECKER(InstanceType, OBJ_NAME, TYPENAME) \
+    \
+    DECLARE_CLASS_CHECKERS(ClassType, OBJ_NAME, TYPENAME)
+
+/**
+ * DECLARE_INSTANCE_CHECKER:
+ * @InstanceType: instance struct name
+ * @OBJ_NAME: the object name in uppercase with underscore separators
+ * @TYPENAME: type name
+ *
+ * Direct usage of this macro should be avoided, and the complete
+ * OBJECT_DECLARE_TYPE macro is recommended instead.
+ *
+ * This macro will provide the instance type cast functions for a
+ * QOM type.
+ */
+#define DECLARE_INSTANCE_CHECKER(InstanceType, OBJ_NAME, TYPENAME) \
+    static inline G_GNUC_UNUSED InstanceType * \
+    OBJ_NAME(const void *obj) \
+    { return OBJECT_CHECK(InstanceType, obj, TYPENAME); }
+
+/**
+ * OBJECT_CHECK:
+ * @type: The C type to use for the return value.
+ * @obj: A derivative of @type to cast.
+ * @name: The QOM typename of @type
+ *
+ * A type safe version of @object_dynamic_cast_assert.  Typically each class
+ * will define a macro based on this type to perform type safe dynamic_casts to
+ * this object type.
+ *
+ * If an invalid object is passed to this function, a run time assert will be
+ * generated.
+ */
+#define OBJECT_CHECK(type, obj, name) \
+    ((type *)object_dynamic_cast_assert(OBJECT(obj), (name), \
+                                        __FILE__, __LINE__, __func__))
+
+/**
+ * DECLARE_CLASS_CHECKERS:
+ * @ClassType: class struct name
+ * @OBJ_NAME: the object name in uppercase with underscore separators
+ * @TYPENAME: type name
+ *
+ * Direct usage of this macro should be avoided, and the complete
+ * OBJECT_DECLARE_TYPE macro is recommended instead.
+ *
+ * This macro will provide the class type cast functions for a
+ * QOM type.
+ */
+#define DECLARE_CLASS_CHECKERS(ClassType, OBJ_NAME, TYPENAME) \
+    static inline G_GNUC_UNUSED ClassType * \
+    OBJ_NAME##_GET_CLASS(const void *obj) \
+    { return OBJECT_GET_CLASS(ClassType, obj, TYPENAME); } \
+    \
+    static inline G_GNUC_UNUSED ClassType * \
+    OBJ_NAME##_CLASS(const void *klass) \
+    { return OBJECT_CLASS_CHECK(ClassType, klass, TYPENAME); }
+
+/**
+ * OBJECT_GET_CLASS:
+ * @class: The C type to use for the return value.
+ * @obj: The object to obtain the class for.
+ * @name: The QOM typename of @obj.
+ *
+ * This function will return a specific class for a given object.  Its generally
+ * used by each type to provide a type safe macro to get a specific class type
+ * from an object.
+ */
+#define OBJECT_GET_CLASS(class, obj, name) \
+    OBJECT_CLASS_CHECK(class, object_get_class(OBJECT(obj)), name)
+
+/**
+ * OBJECT_CLASS_CHECK:
+ * @class_type: The C type to use for the return value.
+ * @class: A derivative class of @class_type to cast.
+ * @name: the QOM typename of @class_type.
+ *
+ * A type safe version of @object_class_dynamic_cast_assert.  This macro is
+ * typically wrapped by each type to perform type safe casts of a class to a
+ * specific class type.
+ */
+#define OBJECT_CLASS_CHECK(class_type, class, name) \
+    ((class_type *)object_class_dynamic_cast_assert(OBJECT_CLASS(class), (name), \
+                                               __FILE__, __LINE__, __func__))
+```
+可以看到，**QOM**提供了**OBJ_NAME()**将任何一个**struct Object**转换为**Object**结构体、**OBJ_NAME##_GET_CLASS()**从**struct Object**提取**Class**结构体和**OBJ_NAME##_CLASS**从**struct ObjectClass**转换为**Class**结构体的函数。
+
+由于**struct Object**的**class**字段指向对应的**struct ObjectClass**，而**struct ObjectClass**的**type**字段指向真实的**struct TypeImpl**内容,基于此，**QOM**通过[**object_dynamic_cast_assert()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L884)和[**object_class_dynamic_cast_assert()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L971)，检查目标类或对象是否为这些指针的祖先从而进行安全的转换，如下所示
+
+```c
+Object *object_dynamic_cast_assert(Object *obj, const char *typename,
+                                   const char *file, int line, const char *func)
+{
+    ...
+#ifdef CONFIG_QOM_CAST_DEBUG
+    int i;
+    Object *inst;
+
+    for (i = 0; obj && i < OBJECT_CLASS_CAST_CACHE; i++) {
+        if (qatomic_read(&obj->class->object_cast_cache[i]) == typename) {
+            goto out;
+        }
+    }
+
+    inst = object_dynamic_cast(obj, typename);
+
+    if (!inst && obj) {
+        fprintf(stderr, "%s:%d:%s: Object %p is not an instance of type %s\n",
+                file, line, func, obj, typename);
+        abort();
+    }
+
+    assert(obj == inst);
+
+    if (obj && obj == inst) {
+        for (i = 1; i < OBJECT_CLASS_CAST_CACHE; i++) {
+            qatomic_set(&obj->class->object_cast_cache[i - 1],
+                       qatomic_read(&obj->class->object_cast_cache[i]));
+        }
+        qatomic_set(&obj->class->object_cast_cache[i - 1], typename);
+    }
+
+out:
+#endif
+    return obj;
+}
+
+Object *object_dynamic_cast(Object *obj, const char *typename)
+{
+    if (obj && object_class_dynamic_cast(object_get_class(obj), typename)) {
+        return obj;
+    }
+
+    return NULL;
+}
+
+ObjectClass *object_class_dynamic_cast(ObjectClass *class,
+                                       const char *typename)
+{
+    ObjectClass *ret = NULL;
+    TypeImpl *target_type;
+    TypeImpl *type;
+
+    if (!class) {
+        return NULL;
+    }
+
+    /* A simple fast path that can trigger a lot for leaf classes.  */
+    type = class->type;
+    if (type->name == typename) {
+        return class;
+    }
+
+    target_type = type_get_by_name(typename);
+    if (!target_type) {
+        /* target class type unknown, so fail the cast */
+        return NULL;
+    }
+    ...
+    if (type_is_ancestor(type, target_type)) {
+        ret = class;
+    }
+
+    return ret;
+}
+
+static bool type_is_ancestor(TypeImpl *type, TypeImpl *target_type)
+{
+    assert(target_type);
+
+    /* Check if target_type is a direct ancestor of type */
+    while (type) {
+        if (type == target_type) {
+            return true;
+        }
+
+        type = type_get_parent(type);
+    }
+
+    return false;
+}
+
+ObjectClass *object_class_dynamic_cast_assert(ObjectClass *class,
+                                              const char *typename,
+                                              const char *file, int line,
+                                              const char *func)
+{
+    ObjectClass *ret;
+
+    trace_object_class_dynamic_cast_assert(class ? class->type->name : "(null)",
+                                           typename, file, line, func);
+
+#ifdef CONFIG_QOM_CAST_DEBUG
+    int i;
+
+    for (i = 0; class && i < OBJECT_CLASS_CAST_CACHE; i++) {
+        if (qatomic_read(&class->class_cast_cache[i]) == typename) {
+            ret = class;
+            goto out;
+        }
+    }
+#else
+    if (!class || !class->interfaces) {
+        return class;
+    }
+#endif
+
+    ret = object_class_dynamic_cast(class, typename);
+    if (!ret && class) {
+        fprintf(stderr, "%s:%d:%s: Object %p is not an instance of type %s\n",
+                file, line, func, class, typename);
+        abort();
+    }
+
+#ifdef CONFIG_QOM_CAST_DEBUG
+    if (class && ret == class) {
+        for (i = 1; i < OBJECT_CLASS_CAST_CACHE; i++) {
+            qatomic_set(&class->class_cast_cache[i - 1],
+                       qatomic_read(&class->class_cast_cache[i]));
+        }
+        qatomic_set(&class->class_cast_cache[i - 1], typename);
+    }
+out:
+#endif
+    return ret;
+}
+```
+
 ## 属性
 类似于linux中的sysfs，考虑到**QOM**的每个类的**Class**结构体基类是[**struct ObjectClass**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L127)，每个对象的**Object**结构体基类是[**Object**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L153)，为了提供一套类和对象的公用对外接口，**QOM**为**struct ObjectClass**和**struct Object**添加了**properties**域，即属性名称到[**struct ObjectProperty**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L88)的哈希表，如下所示
 ```c
