@@ -42,7 +42,7 @@ copy:
 # formal:
 #   icon: link || the description
 social:
-  fa fa-user-circle: /static/cv_zh.pdf || 个人简历
+  fa-solid fa-file-pdf: /static/cv_zh.pdf || 个人简历
   # fab fa-github: https://github.com/xxxxx || Github
   # fas fa-envelope: mailto:xxxxxx@gmail.com || Email
 
