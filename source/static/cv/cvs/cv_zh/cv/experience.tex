@@ -1,0 +1,68 @@
+%-------------------------------------------------------------------------------
+%	SECTION TITLE
+%-------------------------------------------------------------------------------
+\cvsection{项目经历}
+
+
+%-------------------------------------------------------------------------------
+%	CONTENT
+%-------------------------------------------------------------------------------
+\begin{cventries}
+
+%---------------------------------------------------------
+  \cventry
+    {Linux kernel Bug Fixing Summer 2022} % Job title
+    {The Linux Foundation} % Organization
+    {远程实习} % Location
+    {2022/06 - 2022/08} % Date(s)
+    {
+      \begin{cvitems} % Description(s) of tasks/responsibilities
+        \item {学习Linux内核开发的工具使用、编程规范和patch提交流程等}
+        \item {参与提交\textbf{7个}patch，其中有\href{https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/log/?qt=grep&q=hawkins+jiawei}{\textcolor{awesome-skyblue}{5个}}被合并入mainline}
+      \end{cvitems}
+    }
+
+%---------------------------------------------------------
+  \cventry
+    {内核开发} % Job title
+    {kernel Development Community} % Organization
+    {Kernel Mailing Lists} % Location
+    {2022/09 - 至今} % Date(s)
+    {
+      \begin{cvitems} % Description(s) of tasks/responsibilities
+        \item {简单了解网络子系统，修复\href{https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=399ab7fe0fa0d846881685fd4e57e9a8ef7559f7}{\textcolor{awesome-skyblue}{tcindex中的内存泄漏}}问题}
+        \item {简单了解文件子系统，修复\href{https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d85a1bec8e8d552ab13163ca1874dcd82f3d1550}{\textcolor{awesome-skyblue}{NTFS中的越界访问}}问题}
+        \item {分析和调试\textbf{内核漏洞的poc}，并尝试修复漏洞。有\href{https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/log/?qt=author&q=hawkins+jiawei}{\textcolor{awesome-skyblue}{数10个}}patch被合并入mainline}
+      \end{cvitems}
+    }
+
+%---------------------------------------------------------
+  \cventry
+    {openEuler开源实习} % Job title
+    {openEuler社区} % Organization
+    {远程实习} % Location
+    {2023/01 - 2023/06} % Date(s)
+    {
+      \begin{cvitems} % Description(s) of task``s/responsibilities
+        \item {基于classic flang，实现变量的\textbf{可配置颗粒度的内存数据地址对齐}功能}
+        \item {将补丁分别合并入\href{https://gitee.com/src-openeuler/flang/commits/master?user=yinjiawei2023}{\textcolor{awesome-skyblue}{openEuler社区}}和\href{https://github.com/flang-compiler/flang/commit/7f17301a9715e229fc19242802e1bff953967d3e}{\textcolor{awesome-skyblue}{github社区}}}
+      \end{cvitems}
+    }
+
+%---------------------------------------------------------
+  \cventry
+    {Google Summer of Code} % Job title
+    {QEMU社区} % Organization
+    {远程实习} % Location
+    {2023/05 - 2023/09} % Date(s)
+    {
+      \begin{cvitems} % Description(s) of task``s/responsibilities
+        \item {简单了解SVQ机制，发现并修复多个相关bug}
+        \item {实现\href{https://summerofcode.withgoogle.com/archive/2023/projects/zptoHp3v}{\textcolor{awesome-skyblue}{virtio-net CVQ 状态恢复}}功能}
+        \item {实现vdpa的CVQ状态恢复功能的性能优化，在热迁移后可以并行的恢复CVQ状态而非串行恢复}
+        \item {\href{https://gitlab.com/qemu-project/qemu/-/commits/master?search=Hawkins\%20Jiawei}{\textcolor{awesome-skyblue}{相关patch}}被合并入master分支}
+      \end{cvitems}
+    }
+
+%---------------------------------------------------------
+\end{cventries}
