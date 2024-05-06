@@ -1,5 +1,11 @@
-/* 更改代码字体 */
 @import url(https://cdn.jsdelivr.net/npm/firacode@6.2.0/distr/fira_code.css);
-#article-container pre, #article-container code {
-        font-family:Fira Code!important;
+
+#article-container pre {
+        /* 代码块字体 */
+        font-family: Fira Code!important;
+}
+
+:root {
+        /* 代码滚动条颜色 */
+        --hlscrollbar-bg: rgb(128, 128, 128)
 }
