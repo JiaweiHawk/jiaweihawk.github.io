@@ -956,6 +956,164 @@ object_property_try_add(Object *obj, const char *name, const char *type,
 }
 ```
 
+# 参数
+
+**QEMU**允许用户通过命令行参数来自定义虚拟机的设置，如`qemu-system-x86_64 -nic user,model=virtio-net-pci`，这里介绍一下**QEMU**的参数的相关机制。
+
+## 数据结构
+
+**QEMU**参数的数据结构整体关系如下所示
+```
+     ┌────┬─────────────┐
+     │name│"nic"        │
+     ├────┼─────────────┤
+     │head│             ├────┐
+     └────┴─────────────┘    │
+      struct QemuOptsList◄─┐ │
+                           │ │
+                           │ │
+     ┌────┬─────────────┐  │ │
+     │id  │             │  │ │
+     ├────┼─────────────┤  │ │
+     │list│             ├──┘ │
+     ├────┼─────────────┤    │
+     │next│             │◄───┘
+     ├────┼─────────────┤
+┌────┤head│             │
+│    └────┴─────────────┘
+│  ┌─► struct QemuOpts  ◄──────────┐
+│  │                               │
+│  │                               │
+│  │                               │
+│  │                               │
+│  │ ┌────┬────────┐               │    ┌────┬────────────────┐
+│  │ │name│"user"  │               │    │name│"model"         │
+│  │ ├────┼────────┤               │    ├────┼────────────────┤
+│  │ │str │        │               │    │str │"virtio-net-pci"│
+│  │ ├────┼────────┤               │    ├────┼────────────────┤
+│  └─┤opts│        │               └────┤opts│                │
+│    ├────┼────────┤                    ├────┼────────────────┤
+└───►│next│        ├───────────────────►│next│                │
+     └────┴────────┘                    └────┴────────────────┘
+      struct QemuOpt                     struct QemuOpt
+```
+
+### struct QemuOptsList
+
+**QEMU**将所有参数分成了几个大选项，如`-nic`、`-cpu`等，每一个大选项使用结构体[**struct QemuOptsList**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/option.h#L64)表示
+```c
+struct QemuOptsList {
+    const char *name;
+    const char *implied_opt_name;
+    bool merge_lists;  /* Merge multiple uses of option into a single list? */
+    QTAILQ_HEAD(, QemuOpts) head;
+    QemuOptDesc desc[];
+};
+
+// -nic选项的样例
+QemuOptsList qemu_nic_opts = {
+    .name = "nic",
+    .implied_opt_name = "type",
+    .head = QTAILQ_HEAD_INITIALIZER(qemu_nic_opts.head),
+    .desc = {
+        /*
+         * no elements => accept any params
+         * validation will happen later
+         */
+        { /* end of list */ }
+    },
+};
+```
+
+### struct QemuOpt
+
+每个**struct QemuOptsList**大选项下还支持多个小选项，如`-nic`下的`user`和`model`等小选项，每个小选项由[**struct QemuOpt**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/option_int.h#L32)表示
+```c
+struct QemuOpt {
+    char *name;
+    char *str;
+
+    const QemuOptDesc *desc;
+    union {
+        bool boolean;
+        uint64_t uint;
+    } value;
+
+    QemuOpts     *opts;
+    QTAILQ_ENTRY(QemuOpt) next;
+};
+```
+其中**name**表示小选项的字符串表示，**str**表示对应的值。需要注意的是，**struct QemuOpt**并不和**struct QemuOptsList**直接联系，这是因为**QEMU**命令行可能会指定创建两个相同参数的设备，因此会使用**struct QemuOpts**连接。
+
+### struct QemuOpts
+
+[**struct QemuOpts**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/option_int.h#L46)用于连接**struct QemuOpt**和**struct QemuOptsList**，可以理解为一个大选项的实例
+```c
+struct QemuOpts {
+    char *id;
+    QemuOptsList *list;
+    Location loc;
+    QTAILQ_HEAD(, QemuOpt) head;
+    QTAILQ_ENTRY(QemuOpts) next;
+};
+```
+
+## 解析
+
+**QEMU**会在[**qemu_init()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/vl.c#L2737)中解析命令行参数，并填充相关的数据结构
+```c
+void qemu_init(int argc, char **argv)
+{
+    ...
+    /* first pass of option parsing */
+    optind = 1;
+    while (optind < argc) {
+        if (argv[optind][0] != '-') {
+            /* disk image */
+            optind++;
+        } else {
+            const QEMUOption *popt;
+
+            popt = lookup_opt(argc, argv, &optarg, &optind);
+            switch (popt->index) {
+            case QEMU_OPTION_nouserconfig:
+                userconfig = false;
+                break;
+            }
+        }
+    }
+
+    ...
+
+    /* second pass of option parsing */
+    optind = 1;
+    for(;;) {
+        if (optind >= argc)
+            break;
+        if (argv[optind][0] != '-') {
+            loc_set_cmdline(argv, optind, 1);
+            drive_add(IF_DEFAULT, 0, argv[optind++], HD_OPTS);
+        } else {
+            const QEMUOption *popt;
+
+            popt = lookup_opt(argc, argv, &optarg, &optind);
+            if (!(popt->arch_mask & arch_type)) {
+                error_report("Option not supported for this target");
+                exit(1);
+            }
+            switch(popt->index) {
+            ...
+            case QEMU_OPTION_nic:
+                default_net = 0;
+                net_client_parse(qemu_find_opts("nic"), optarg);
+                break;
+            ...
+            }
+        }
+    }
+}
+```
+
 # 参考
 
 - [The QEMU Object Model (QOM)](https://qemu-project.gitlab.io/qemu/devel/qom.html)
@@ -968,3 +1126,4 @@ object_property_try_add(Object *obj, const char *name, const char *type,
 - [浅谈QEMU的对象系统 ](https://juejin.cn/post/6844903845550620685)
 - [QOM Property](https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2018/09/05/qom-property)
 - [QOM exegesis and apocalypse](https://www.linux-kvm.org/images/9/90/Kvmforum14-qom.pdf)
+- [QEMU参数解析](https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2015/09/26/qemu-options)
