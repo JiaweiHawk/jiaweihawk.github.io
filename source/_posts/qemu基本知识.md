@@ -1114,6 +1114,204 @@ void qemu_init(int argc, char **argv)
 }
 ```
 
+**QEMU**首先在[**lookup_opt()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/vl.c#L1619)中解析出所属的大选项，然后再继续解析出一个大选项的实例**struct QemuOpts**。
+
+以`-nic`大选项为例，其在[**net_client_parse()**](https://elixir.bootlin.com/qemu/v8.2.2/source/net/net.c#L1759)中解析出**struct QemuOpts**并插入在**nic**对应的**struct QemuOptsList**中，如下所示
+```c
+static bool opts_do_parse(QemuOpts *opts, const char *params,
+                          const char *firstname,
+                          bool warn_on_flag, bool *help_wanted, Error **errp)
+{
+    char *option, *value;
+    const char *p;
+    QemuOpt *opt;
+
+    for (p = params; *p;) {
+        p = get_opt_name_value(p, firstname, warn_on_flag, help_wanted, &option, &value);
+        if (help_wanted && *help_wanted) {
+            g_free(option);
+            g_free(value);
+            return false;
+        }
+        firstname = NULL;
+
+        if (!strcmp(option, "id")) {
+            g_free(option);
+            g_free(value);
+            continue;
+        }
+
+        opt = opt_create(opts, option, value);
+        g_free(option);
+        if (!opt_validate(opt, errp)) {
+            qemu_opt_del(opt);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static QemuOpts *opts_parse(QemuOptsList *list, const char *params,
+                            bool permit_abbrev,
+                            bool warn_on_flag, bool *help_wanted, Error **errp)
+{
+    const char *firstname;
+    char *id = opts_parse_id(params);
+    QemuOpts *opts;
+
+    assert(!permit_abbrev || list->implied_opt_name);
+    firstname = permit_abbrev ? list->implied_opt_name : NULL;
+
+    opts = qemu_opts_create(list, id, !list->merge_lists, errp);
+    g_free(id);
+    if (opts == NULL) {
+        return NULL;
+    }
+
+    if (!opts_do_parse(opts, params, firstname,
+                       warn_on_flag, help_wanted, errp)) {
+        qemu_opts_del(opts);
+        return NULL;
+    }
+
+    return opts;
+}
+
+/**
+ * Create a QemuOpts in @list and with options parsed from @params.
+ * If @permit_abbrev, the first key=value in @params may omit key=,
+ * and is treated as if key was @list->implied_opt_name.
+ * Report errors with error_report_err().  This is inappropriate in
+ * QMP context.  Do not use this function there!
+ * Return the new QemuOpts on success, null pointer on error.
+ */
+QemuOpts *qemu_opts_parse_noisily(QemuOptsList *list, const char *params,
+                                  bool permit_abbrev)
+{
+    Error *err = NULL;
+    QemuOpts *opts;
+    bool help_wanted = false;
+
+    opts = opts_parse(list, params, permit_abbrev, true,
+                      opts_accepts_any(list) ? NULL : &help_wanted,
+                      &err);
+    if (!opts) {
+        assert(!!err + !!help_wanted == 1);
+        if (help_wanted) {
+            qemu_opts_print_help(list, true);
+        } else {
+            error_report_err(err);
+        }
+    }
+    return opts;
+}
+
+void net_client_parse(QemuOptsList *opts_list, const char *optstr)
+{
+    if (!qemu_opts_parse_noisily(opts_list, optstr, true)) {
+        exit(1);
+    }
+}
+```
+
+可以看到，**QEMU**在[**opts_parse()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/qemu-option.c#L881)中使用[**qemu_opts_create()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/qemu-option.c#L608)创建**struct QemuOpts**实例并插入到**struct QemuOptsList**中，然后使用[**opts_do_parse()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/qemu-option.c#L799)解析所有**struct QemuOpt**并插入到**struct QemuOpts**中。
+
+至于检查参数的正确性，则推迟到初始化**nic**设备时在进行即可，如下所示
+```c
+/*
+ * #0  visit_check_struct (v=0x5555570ea430, errp=0x5555570ea550) at ../../qemu/qapi/qapi-visit-core.c:62
+ * #1  0x0000555556055353 in visit_type_Netdev (v=0x5555570ea430, name=0x0, obj=0x7fffffffda18, errp=0x55555705bca0 <error_fatal>) at qapi/qapi-visit-net.c:1327
+ * #2  0x0000555555c3d0b4 in net_client_init (opts=0x5555570e7f60, is_netdev=true, errp=0x55555705bca0 <error_fatal>) at ../../qemu/net/net.c:1427
+ * #3  0x0000555555c3e0f6 in net_param_nic (dummy=0x0, opts=0x5555570e7f60, errp=0x55555705bca0 <error_fatal>) at ../../qemu/net/net.c:1822
+ * #4  0x00005555560b9a7c in qemu_opts_foreach (list=0x555556f485e0 <qemu_nic_opts>, func=0x555555c3dd92 <net_param_nic>, opaque=0x0, errp=0x55555705bca0 <error_fatal>) at ../../qemu/util/qemu-option.c:1135
+ * #5  0x0000555555c3e2bb in net_init_clients () at ../../qemu/net/net.c:1860
+ * #6  0x0000555555bd8ef8 in qemu_create_late_backends () at ../../qemu/system/vl.c:2011
+ * #7  0x0000555555bdd5f7 in qemu_init (argc=15, argv=0x7fffffffde08) at ../../qemu/system/vl.c:3712
+ * #8  0x0000555555e9282d in main (argc=15, argv=0x7fffffffde08) at ../../qemu/system/main.c:47
+ * #9  0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e92809 <main>, argc=argc@entry=15, argv=argv@entry=0x7fffffffde08) at ../sysdeps/nptl/libc_start_call_main.h:58
+ * #10 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e92809 <main>, argc=15, argv=0x7fffffffde08, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffddf8) at ../csu/libc-start.c:392
+ * #11 0x000055555586ba15 in _start ()
+ */
+bool visit_type_NetLegacyNicOptions_members(Visitor *v, NetLegacyNicOptions *obj, Error **errp)
+{
+    bool has_netdev = !!obj->netdev;
+    bool has_macaddr = !!obj->macaddr;
+    bool has_model = !!obj->model;
+    bool has_addr = !!obj->addr;
+
+    if (visit_optional(v, "netdev", &has_netdev)) {
+        if (!visit_type_str(v, "netdev", &obj->netdev, errp)) {
+            return false;
+        }
+    }
+    if (visit_optional(v, "macaddr", &has_macaddr)) {
+        if (!visit_type_str(v, "macaddr", &obj->macaddr, errp)) {
+            return false;
+        }
+    }
+    if (visit_optional(v, "model", &has_model)) {
+        if (!visit_type_str(v, "model", &obj->model, errp)) {
+            return false;
+        }
+    }
+    if (visit_optional(v, "addr", &has_addr)) {
+        if (!visit_type_str(v, "addr", &obj->addr, errp)) {
+            return false;
+        }
+    }
+    if (visit_optional(v, "vectors", &obj->has_vectors)) {
+        if (!visit_type_uint32(v, "vectors", &obj->vectors, errp)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool visit_type_Netdev_members(Visitor *v, Netdev *obj, Error **errp)
+{
+    ...
+    switch (obj->type) {
+    ...
+    case NET_CLIENT_DRIVER_NIC:
+        return visit_type_NetLegacyNicOptions_members(v, &obj->u.nic, errp);
+    ...
+    default:
+        abort();
+    }
+    return true;
+}
+
+bool visit_type_Netdev(Visitor *v, const char *name,
+                 Netdev **obj, Error **errp)
+{
+    bool ok = false;
+
+    if (!visit_start_struct(v, name, (void **)obj, sizeof(Netdev), errp)) {
+        return false;
+    }
+    if (!*obj) {
+        /* incomplete */
+        assert(visit_is_dealloc(v));
+        ok = true;
+        goto out_obj;
+    }
+    if (!visit_type_Netdev_members(v, *obj, errp)) {
+        goto out_obj;
+    }
+    ok = visit_check_struct(v, errp);
+out_obj:
+    visit_end_struct(v, (void **)obj);
+    if (!ok && visit_is_input(v)) {
+        qapi_free_Netdev(*obj);
+        *obj = NULL;
+    }
+    return ok;
+}
+```
+
+**QEMU**在**visit_type_Netdev()**完成参数的认证，其通过**visit_type_Netdev_members()**解析**nic**大选项预设的小选项，并将**struct QemuOpts**中剩余的小选项当做非法小选项即可。其中**visit_type_Netdev()**函数是通过[**qapi-gen.py**](https://elixir.bootlin.com/qemu/v8.2.2/source/scripts/qapi-gen.py)基于[**net.json**](https://elixir.bootlin.com/qemu/v8.2.2/source/qapi/net.json#L97)自动生成的函数。
+
 # 参考
 
 - [The QEMU Object Model (QOM)](https://qemu-project.gitlab.io/qemu/devel/qom.html)
