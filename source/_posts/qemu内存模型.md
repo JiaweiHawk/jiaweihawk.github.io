@@ -111,6 +111,64 @@ struct RAMBlock {
 └─────┴─────────────────────┘     
 ```
 
+## 初始化
+
+Qemu会通过[**qemu_ram_alloc_internal()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L2008)来分配和初始化**RAMBlock**数据，关键逻辑如下所示
+```c
+static
+RAMBlock *qemu_ram_alloc_internal(ram_addr_t size, ram_addr_t max_size,
+                                  void (*resized)(const char*,
+                                                  uint64_t length,
+                                                  void *host),
+                                  void *host, uint32_t ram_flags,
+                                  MemoryRegion *mr, Error **errp)
+{
+    RAMBlock *new_block;
+    ...
+    new_block = g_malloc0(sizeof(*new_block));
+    new_block->host = host;
+    ram_block_add(new_block, &local_err);
+    ...
+    return new_block;
+}
+
+static void ram_block_add(RAMBlock *new_block, Error **errp)
+{
+    RAMBlock *block;
+    RAMBlock *last_block = NULL;
+
+    qemu_mutex_lock_ramlist();
+    new_block->host = qemu_anon_ram_alloc(new_block->max_length,
+                                                  &new_block->mr->align,
+                                                  shared, noreserve);
+
+    /* Keep the list sorted from biggest to smallest block.  Unlike QTAILQ,
+     * QLIST (which has an RCU-friendly variant) does not have insertion at
+     * tail, so save the last element in last_block.
+     */
+    RAMBLOCK_FOREACH(block) {
+        last_block = block;
+        if (block->max_length < new_block->max_length) {
+            break;
+        }
+    }
+    if (block) {
+        QLIST_INSERT_BEFORE_RCU(block, new_block, next);
+    } else if (last_block) {
+        QLIST_INSERT_AFTER_RCU(last_block, new_block, next);
+    } else { /* list is empty */
+        QLIST_INSERT_HEAD_RCU(&ram_list.blocks, new_block, next);
+    }
+
+    /* Write list before version */
+    smp_wmb();
+    ram_list.version++;
+    qemu_mutex_unlock_ramlist();
+}
+```
+
+其主要就是初始化**RAMBlock**，管理该**RAMBlock**对应的hva，并将其插入**ram_list**中
+
 # ~~Memory Region~~
 
 # ~~AddressSpace~~
