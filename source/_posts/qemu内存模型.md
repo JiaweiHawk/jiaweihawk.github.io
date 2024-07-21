@@ -9,7 +9,7 @@ categories: ['虚拟化']
 
 这里简单介绍一些**QEMU**的内存模型，即**QEMU**是如何管理gpa到hva的映射关系。
 
-其内存模型主要由**RAMBlock**、**Memory Region**、**AddressSpace**和**FlatView**等结构构成。
+其内存模型主要由**RAMBlock**、**MemoryRegion**、**AddressSpace**和**FlatView**等结构构成。
 
 # RAMBlock
 
@@ -169,7 +169,131 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
 
 其主要就是初始化**RAMBlock**，管理该**RAMBlock**对应的hva，并将其插入**ram_list**中
 
-# ~~Memory Region~~
+# MemoryRegion
+
+实际上，不同区域的gpa有着不同的属性和功能，因此需要分开管理。
+
+例如，对于如下e1000-mmio的gpa访问，实际上并不是内存的读写，而是对于设备的模拟操作，Qemu需要模拟设备处理guest的请求
+```
+00000000febc0000-00000000febdffff (prio 1, i/o): e1000-mmio
+```
+
+而对于如下的pc.ram的gpa访问，则只是单纯的内存访问，Qemu只需要简单的存取或读取数据即可
+```
+0000000000000000-00000000ffffffff (prio 0, ram): pc.ram
+```
+
+为此，Qemu使用[**struct MemoryRegion**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/exec/memory.h#L785)，以树状组织管理整个gpa。
+
+## struct MemoryRegion
+
+```c
+/** MemoryRegion:
+ *
+ * A struct representing a memory region.
+ */
+struct MemoryRegion {
+    Object parent_obj;
+
+    /* private: */
+
+    /* The following fields should fit in a cache line */
+    bool romd_mode;
+    bool ram;
+    bool subpage;
+    bool readonly; /* For RAM regions */
+    bool nonvolatile;
+    bool rom_device;
+    bool flush_coalesced_mmio;
+    bool unmergeable;
+    uint8_t dirty_log_mask;
+    bool is_iommu;
+    RAMBlock *ram_block;
+    Object *owner;
+    /* owner as TYPE_DEVICE. Used for re-entrancy checks in MR access hotpath */
+    DeviceState *dev;
+
+    const MemoryRegionOps *ops;
+    void *opaque;
+    MemoryRegion *container;
+    int mapped_via_alias; /* Mapped via an alias, container might be NULL */
+    Int128 size;
+    hwaddr addr;
+    void (*destructor)(MemoryRegion *mr);
+    uint64_t align;
+    bool terminates;
+    bool ram_device;
+    bool enabled;
+    bool warning_printed; /* For reservations */
+    uint8_t vga_logging_count;
+    MemoryRegion *alias;
+    hwaddr alias_offset;
+    int32_t priority;
+    QTAILQ_HEAD(, MemoryRegion) subregions;
+    QTAILQ_ENTRY(MemoryRegion) subregions_link;
+    QTAILQ_HEAD(, CoalescedMemoryRange) coalesced;
+    const char *name;
+    unsigned ioeventfd_nb;
+    MemoryRegionIoeventfd *ioeventfds;
+    RamDiscardManager *rdm; /* Only for RAM */
+
+    /* For devices designed to perform re-entrant IO into their own IO MRs */
+    bool disable_reentrancy_guard;
+};
+```
+
+其**addr**字段表明当前Guest内存区间的起始gpa，而**size**表明这段内存区间的大小。
+
+实际上，根据[Qemu官网](https://www.qemu.org/docs/master/devel/memory.html#types-of-regions)，**MemoryRegion**可以分为**RAM MemoryRegion**、**ROM MemoryRegion**、**MMIO MemoryRegion**、**ROM device MemoryRegion**、**IOMMU MemoryRegion**、**container MemoryRegion**、**alias MemoryRegion**和**reservation MemoryRegion**。
+
+## MR间关系
+
+### 树状结构
+
+对于**container MemoryRegion**来说，其**subregions**字段包含了其他的**子MemoryRegion**，而这些**子MemoryRegion**的**container**字段则指向该**container MemoryRegion**。这些**子MemoryRegion**之间没有交集，通过[**memory_region_add_subregion()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L2648)初始化对应的**subregions**和**container**字段，从而构建出如下的树状结构
+
+```
+                              struct MemoryRegion                                        
+                             ┌──────────┬────────┐                                       
+                             │name      │io      │                                       
+                             ├──────────┼────────┤                                       
+                             │addr      │0       │                                       
+                             ├──────────┼────────┤                                       
+                             │size      │65536   │                                       
+                             ├──────────┼────────┤                                       
+                             │subregions│NULL    │                                       
+                             └──────────┴───┬────┘                                       
+                                            │                                            
+                          ┌─────────────────┴─────────────────┬────────────────────┬───  
+                          │                                   ▼                    │     
+                          ▼                         struct MemoryRegion            ▼     
+                struct MemoryRegion                ┌──────────┬──────────┐
+               ┌──────────┬──────────┐             │name      │pm-smbus  │
+               │name      │piix4-pm  │             ├──────────┼──────────┤
+               ├──────────┼──────────┤             │addr      │45312     │
+               │addr      │0         │             ├──────────┼──────────┤
+               ├──────────┼──────────┤             │size      │64        │
+               │size      │64        │             ├──────────┼──────────┤               
+               ├──────────┼──────────┤             │subregions│NULL      │               
+               │subregions│NULL      │             └──────────┴──────────┘               
+               └──────────┴─────┬────┘                                                   
+                                │                                                        
+             ┌──────────────────┴──────────┬──────────────────┬───
+             │                             │                  │                          
+             ▼                             ▼                  ▼                          
+ struct MemoryRegion            struct MemoryRegion                                      
+┌──────────┬──────────┐        ┌──────────┬──────────┐                                   
+│name      │acpi-cnt  │        │name      │acpi-evt  │                                   
+├──────────┼──────────┤        ├──────────┼──────────┤                                   
+│addr      │4         │        │addr      │0         │                                   
+├──────────┼──────────┤        ├──────────┼──────────┤                                   
+│size      │2         │        │size      │4         │                                   
+├──────────┼──────────┤        ├──────────┼──────────┤                                   
+│subregions│NULL      │        │subregions│NULL      │                                   
+└──────────┴──────────┘        └──────────┴──────────┘                                   
+```
+
+### 重叠
 
 # ~~AddressSpace~~
 
@@ -182,3 +306,4 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
 3. [地址空间](https://richardweiyang-2.gitbook.io/understanding_qemu/00-as)
 4. [QEMU的内存模拟](https://66ring.github.io/2021/04/13/universe/qemu/qemu_softmmu/)
 5. [MemoryRegion模型原理，以及同FlatView模型的关系(QEMU2.0.0)](https://blog.csdn.net/leoufung/article/details/48781205)
+6. [The memory API](https://www.qemu.org/docs/master/devel/memory.html)
