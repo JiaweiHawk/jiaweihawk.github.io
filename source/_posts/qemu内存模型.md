@@ -293,7 +293,45 @@ struct MemoryRegion {
 └──────────┴──────────┘        └──────────┴──────────┘                                   
 ```
 
-### 重叠
+### 交叠
+
+通常情况下，MemoryRegion之间不会交叠：要么内含；要么不相交。
+
+但是考虑到诸如pcie设备的地址空间是动态分配的，因此允许MemoryRegion交叠并通过优先级决定交叠部分的可见性会极大地简化这部分代码。可以通过[**memory_region_add_subregion_overlap()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L2656)来向一个**container MemoryRegion**中插入和其他**子MemoryRegion**交叠的MemoryRegion并声明优先级，如下所示
+
+```
+                   struct MemoryRegion                                         
+                  ┌──────────┬──────────────────┐                              
+                  │name      │pci               │                              
+                  ├──────────┼──────────────────┤                              
+                  │addr      │0                 │                              
+                  ├──────────┼──────────────────┤                              
+                  │size      │0xffffffffffffffff│                              
+                  ├──────────┼──────────────────┤                              
+                  │priority  │-1                │                              
+                  ├──────────┼──────────────────┤                              
+                  │subregions│NULL              │                              
+                  └──────────┴───┬──────────────┘                              
+                                 │                                             
+               ┌─────────────────┴─────────┬───────────────────────────────►   
+               │                           │                                   
+               ▼                           ▼                                   
+ struct MemoryRegion                                                           
+┌──────────┬──────────────────┐                                                
+│name      │vga-lowmem        │                                                
+├──────────┼──────────────────┤                                                
+│addr      │0xa0000           │                                                
+├──────────┼──────────────────┤                                                
+│size      │0x20000           │                                                
+├──────────┼──────────────────┤                                                
+│priority  │1                 │                                                
+├──────────┼──────────────────┤                                                
+│subregions│NULL              │                                                
+└──────────┴──────────────────┘                                                
+```
+
+最终，其表现出来的结果是\[0, 0x9ffff\](pci)、\[0xa0000, 0xbffff\](vga-lowmem)和\[0xc0000, 0xffffffffffffffff\](pci)
+
 
 # ~~AddressSpace~~
 
