@@ -634,7 +634,7 @@ static void flatview_simplify(FlatView *view)
 
 可以看到，生成**FlatView**整体可分为两步，首先通过[**memory_region_get_flatview_root()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L708)获取**AddressSpace**对应的**树状MemoryRegion**根，其次通过[**generate_memory_topology()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L753)平坦化地址空间。
 
-其中**generate_memory_topology**的逻辑也相对比较清晰:由于**MemoryRegion**的**子MemoryRegion**不相交且在**subregions**字段指向的链表中按地址升序排列，因此只需要通过**DFS**遍历整棵树即可平坦化。
+其中**generate_memory_topology**的逻辑也相对比较清晰:通过**DFS**遍历整棵树即可平坦化。
 
 ## ~~内存分派~~
 
