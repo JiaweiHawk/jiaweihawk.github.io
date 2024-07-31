@@ -636,7 +636,183 @@ static void flatview_simplify(FlatView *view)
 
 其中**generate_memory_topology**的逻辑也相对比较清晰:通过**DFS**遍历整棵树即可平坦化。
 
-## ~~内存分派~~
+## 内存分派
+
+虽然Qemu已经通过**FlatView**加快了**AddressSpace**地址对应的**MemoryRegion**的查找，但还可以使用[**struct AddressSpaceDispatch**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L130)以类似页表的形式进一步加快查找
+
+```c
+struct AddressSpaceDispatch {
+    MemoryRegionSection *mru_section;
+    /* This is a multi-level map on the physical address space.
+     * The bottom level has pointers to MemoryRegionSections.
+     */
+    PhysPageEntry phys_map;
+    PhysPageMap map;
+};
+
+/**
+ * struct MemoryRegionSection: describes a fragment of a #MemoryRegion
+ *
+ * @mr: the region, or %NULL if empty
+ * @fv: the flat view of the address space the region is mapped in
+ * @offset_within_region: the beginning of the section, relative to @mr's start
+ * @size: the size of the section; will not exceed @mr's boundaries
+ * @offset_within_address_space: the address of the first byte of the section
+ *     relative to the region's address space
+ * @readonly: writes to this section are ignored
+ * @nonvolatile: this section is non-volatile
+ * @unmergeable: this section should not get merged with adjacent sections
+ */
+struct MemoryRegionSection {
+    Int128 size;
+    MemoryRegion *mr;
+    FlatView *fv;
+    hwaddr offset_within_region;
+    hwaddr offset_within_address_space;
+    bool readonly;
+    bool nonvolatile;
+    bool unmergeable;
+};
+
+struct PhysPageEntry {
+    /* How many bits skip to next level (in units of L2_SIZE). 0 for a leaf. */
+    uint32_t skip : 6;
+     /* index into phys_sections (!skip) or phys_map_nodes (skip) */
+    uint32_t ptr : 26;
+};
+
+/* Size of the L2 (and L3, etc) page tables.  */
+#define ADDR_SPACE_BITS 64
+#define P_L2_BITS 9
+#define P_L2_SIZE (1 << P_L2_BITS)
+#define P_L2_LEVELS (((ADDR_SPACE_BITS - TARGET_PAGE_BITS - 1) / P_L2_BITS) + 1)
+
+typedef PhysPageEntry Node[P_L2_SIZE];
+
+
+typedef struct PhysPageMap {
+    struct rcu_head rcu;
+
+    unsigned sections_nb;
+    unsigned sections_nb_alloc;
+    unsigned nodes_nb;
+    unsigned nodes_nb_alloc;
+    Node *nodes;
+    MemoryRegionSection *sections;
+} PhysPageMap;
+```
+
+Qemu使用[**address_space_lookup_region()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L336)完成地址分派，逻辑如下所示
+```c
+/* Called from RCU critical section */
+static MemoryRegionSection *address_space_lookup_region(AddressSpaceDispatch *d,
+                                                        hwaddr addr,
+                                                        bool resolve_subpage)
+{
+    MemoryRegionSection *section = qatomic_read(&d->mru_section);
+    subpage_t *subpage;
+
+    if (!section || section == &d->map.sections[PHYS_SECTION_UNASSIGNED] ||
+        !section_covers_addr(section, addr)) {
+        section = phys_page_find(d, addr);
+        qatomic_set(&d->mru_section, section);
+    }
+    ...
+    return section;
+}
+
+static MemoryRegionSection *phys_page_find(AddressSpaceDispatch *d, hwaddr addr)
+{
+    PhysPageEntry lp = d->phys_map, *p;
+    Node *nodes = d->map.nodes;
+    MemoryRegionSection *sections = d->map.sections;
+    hwaddr index = addr >> TARGET_PAGE_BITS;
+    int i;
+
+    for (i = P_L2_LEVELS; lp.skip && (i -= lp.skip) >= 0;) {
+        if (lp.ptr == PHYS_MAP_NODE_NIL) {
+            return &sections[PHYS_SECTION_UNASSIGNED];
+        }
+        p = nodes[lp.ptr];
+        lp = p[(index >> (i * P_L2_BITS)) & (P_L2_SIZE - 1)];
+    }
+
+    if (section_covers_addr(&sections[lp.ptr], addr)) {
+        return &sections[lp.ptr];
+    } else {
+        return &sections[PHYS_SECTION_UNASSIGNED];
+    }
+}
+```
+
+类似于页表地址转换，内存分派使用了6级的map实现了地址到**MemoryRegionSection**的转换。具体来说，**map**中的**Node**类型类似于页表地址转换中的**中间项**，**map**中的**MemoryRegionSection**类似于页表地址转换中最后的物理页，**phys_map**则类似于页表地址转换中的**CR3**寄存器，即第一级Map。具体来说，**map**中的**nodes**数组存放着该**AddressSpace**所有的**Node**，而**sections**数组则存放着所有的**MemoryRegionSection**。**PhysPageEntry**的**ptr**在作为这些数组的下标进行索引，如下所示。
+```
+                                                               ┌─────────────────────┐                
+                                                       ┌───────┼───►struct Node      │             gpa
+                                                       │       │   ┌────────────┐    │              │ 
+                                                       │       │ ┌─┼───         │◄───┼──────────────┘ 
+                                                       │       │ │ ├────────────┤    │                
+                                                       │       │ │ │   ......   │    │                
+                                                       │       │ │ ├────────────┤    │                
+                                                       │       │ │ │            │    │                
+                                                       │       │ │ └────────────┘    │                
+                                                       │       │ │                   │                
+                                                       │       ├─┼───────────────────┤                
+                         struct AddressSpaceDispatch   │       │ │   struct Node     │                
+                              ┌────────┬─────┐         │       │ │  ┌────────────┐   │                
+                              │phys_map│     ├─────────┘       │ └─►│         ───┼─┐ │                
+                              ├────────┼─────┤                 │    ├────────────┤ │ │                
+                              │map     │     ├──┐              │    │   ......   │ │ │                
+                              └────────┴─────┘  │              │    ├────────────┤ │ │                
+                                                │              │    │            │ │ │                
+                                     ┌──────────┘              │    └────────────┘ │ │                
+                                     │                         │                   │ │                
+                                     ▼                         ├───────────────────┼─┤                
+                            struct PhysPageMap                 │     struct Node   │ │                
+                              ┌────────┬───┐                   │    ┌────────────┐ │ │                
+                              │nodes   │   ├───────────────────►    │            │ │ │                
+┌─────────────────────┐       ├────────┼───┤                   │    ├────────────┤ │ │                
+│ MemoryReginSection  │◄──────┤sections│   │                   │    │   ......   │ │ │                
+├─────────────────────┤       └────────┴───┘                   │    ├────────────┤ │ │                
+│ MemoryReginSection  │                                        │ ┌──┼───         │◄┘ │                
+├─────────────────────┤                                        │ │  └────────────┘   │                
+│       ......        │                                        │ │                   │                
+├─────────────────────┤                                        ├─┼───────────────────┤                
+│ MemoryReginSection  │◄───────────┐                           │ │   struct Node     │                
+└─────────────────────┘            │                           │ │  ┌────────────┐   │                
+                                   │                           │ └─►│         ───┼─┐ │                
+                                   │                           │    ├────────────┤ │ │                
+                                   │                           │    │   ......   │ │ │                
+                                   │                           │    ├────────────┤ │ │                
+                                   │                           │    │            │ │ │                
+                                   │                           │    └────────────┘ │ │                
+                                   │                           │                   │ │                
+                                   │                           ├───────────────────┼─┤                
+                                   │                           │     struct Node   │ │                
+                                   │                           │    ┌────────────┐ │ │                
+                                   │                           │  ┌─┼───         │◄┘ │                
+                                   │                           │  │ ├────────────┤   │                
+                                   │                           │  │ │   ......   │   │                
+                                   │                           │  │ ├────────────┤   │                
+                                   │                           │  │ │            │   │                
+                                   │                           │  │ └────────────┘   │                
+                                   │                           │  │                  │                
+                                   │                           ├──┼──────────────────┤                
+                                   │                           │  │  ...........     │                
+                                   │                           ├──┼──────────────────┤                
+                                   │                           │  │  struct Node     │                
+                                   │                           │  │ ┌────────────┐   │                
+                                   │                           │  └►│         ───┼─┐ │                
+                                   │                           │    ├────────────┤ │ │                
+                                   │                           │    │   ......   │ │ │                
+                                   │                           │    ├────────────┤ │ │                
+                                   │                           │    │            │ │ │                
+                                   │                           │    └────────────┘ │ │                
+                                   │                           │                   │ │                
+                                   │                           └───────────────────┼─┘                
+                                   │                                               │                  
+                                   └───────────────────────────────────────────────┘                  
+```
 
 # 参考
 
