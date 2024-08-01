@@ -242,7 +242,7 @@ struct MemoryRegion {
 };
 ```
 
-其**addr**字段表明当前Guest内存区间的起始gpa，而**size**表明这段内存区间的大小。
+其**addr**字段表明**MemoryRegion**起始gpa相对于**父MemoryRegion**起始gpa的相对偏移，而**size**表明这段内存区间的大小。
 
 实际上，根据[Qemu官网](https://www.qemu.org/docs/master/devel/memory.html#types-of-regions)，**MemoryRegion**可以分为**RAM MemoryRegion**、**ROM MemoryRegion**、**MMIO MemoryRegion**、**ROM device MemoryRegion**、**IOMMU MemoryRegion**、**container MemoryRegion**、**alias MemoryRegion**和**reservation MemoryRegion**。
 
@@ -285,7 +285,7 @@ struct MemoryRegion {
 ┌──────────┬──────────┐        ┌──────────┬──────────┐                                 
 │name      │acpi-cnt  │        │name      │acpi-evt  │                                 
 ├──────────┼──────────┤        ├──────────┼──────────┤                                 
-│addr      │1540      │        │addr      │1536      │                                 
+│addr      │4         │        │addr      │0         │                                 
 ├──────────┼──────────┤        ├──────────┼──────────┤                                 
 │size      │2         │        │size      │4         │                                 
 ├──────────┼──────────┤        ├──────────┼──────────┤                                 
@@ -449,7 +449,7 @@ struct FlatRange {
 │   │  ┌──────────┬──────────┐        ┌──────────┬──────────┐    │                  │                   │             │ │size  │43712            │ │      │   │   │  
 │   │  │name      │acpi-cnt  │        │name      │acpi-evt  │    │                  │                   │             │ ├──────┼─────────────────┤ │      │   │   │  
 │   │  ├──────────┼──────────┤        ├──────────┼──────────┤    │                  │                   ├─────────────┼─┤mr    │                 │ │      │   │   │  
-│   │  │addr      │1540      │        │addr      │1536      │    │                  │                   │             │ └──────┴─────────────────┘ │      │   │   │  
+│   │  │addr      │4         │        │addr      │0         │    │                  │                   │             │ └──────┴─────────────────┘ │      │   │   │  
 │   │  ├──────────┼──────────┤        ├──────────┼──────────┤    │                  │                   │             │                            │      │   │   │  
 │   │  │size      │2         │        │size      │4         │    │                  │                   │             ├────────────────────────────┤      │   │   │  
 │   │  ├──────────┼──────────┤        ├──────────┼──────────┤    │                  │                   │             │      struct FlatRange      │      │   │   │  
