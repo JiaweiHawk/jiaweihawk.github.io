@@ -13,7 +13,7 @@ categories: ['虚拟化']
 
 # RAMBlock
 
-无论如何，Qemu都需要申请一段内存空间用来存放虚拟机内存的真实数据，而这部分内存空间由[**struct RAMBLOCK**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/exec/ramblock.h#L27)来管理。
+无论如何，Qemu都需要申请一段内存空间用来存放虚拟机内存的真实数据，而这部分内存空间由[**struct RAMBlock**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/exec/ramblock.h#L27)来管理。
 
 ## struct RAMBlock
 
@@ -87,7 +87,7 @@ struct RAMBlock {
 
 其中，**host**指向Qemu申请的内存空间的虚拟地址，也就是**hva**。
 
-而所有的**struct RAMBlock**由**next**指针形成单链表存储在[**ram_list**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L88)，如下图所示
+而所有的**struct RAMBlock**由**next**指针形成单链表存储在[**ram_list**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/physmem.c#L88)，如下图所示
 
 ```
          ram_list                 
@@ -113,7 +113,7 @@ struct RAMBlock {
 
 ## 初始化
 
-Qemu会通过[**qemu_ram_alloc_internal()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L2008)来分配和初始化**RAMBlock**数据，关键逻辑如下所示
+Qemu会通过[**qemu_ram_alloc_internal()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/physmem.c#L2009)来分配和初始化**RAMBlock**数据，关键逻辑如下所示
 ```c
 static
 RAMBlock *qemu_ram_alloc_internal(ram_addr_t size, ram_addr_t max_size,
@@ -183,7 +183,7 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
 0000000000000000-00000000ffffffff (prio 0, ram): pc.ram
 ```
 
-为此，Qemu使用[**struct MemoryRegion**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/exec/memory.h#L785)，以树状组织管理整个gpa。
+为此，Qemu使用[**struct MemoryRegion**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/exec/memory.h#L785)，以树状组织管理整个gpa。
 
 ## struct MemoryRegion
 
@@ -250,7 +250,7 @@ struct MemoryRegion {
 
 ### 树状结构
 
-对于**container MemoryRegion**来说，其**subregions**字段包含了其他的**子MemoryRegion**，而这些**子MemoryRegion**的**container**字段则指向该**container MemoryRegion**。这些**子MemoryRegion**之间没有交集，通过[**memory_region_add_subregion()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L2648)初始化对应的**subregions**和**container**字段，从而构建出如下的树状结构
+对于**container MemoryRegion**来说，其**subregions**字段包含了其他的**子MemoryRegion**，而这些**子MemoryRegion**的**container**字段则指向该**container MemoryRegion**。这些**子MemoryRegion**之间没有交集，通过[**memory_region_add_subregion()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/memory.c#L2664)初始化对应的**subregions**和**container**字段，从而构建出如下的树状结构
 
 ```
                               struct MemoryRegion                                      
@@ -297,7 +297,7 @@ struct MemoryRegion {
 
 通常情况下，MemoryRegion之间不会交叠：要么内含；要么不相交。
 
-但是考虑到诸如pcie设备的地址空间是动态分配的，因此允许MemoryRegion交叠并通过优先级决定交叠部分的可见性会极大地简化这部分代码。可以通过[**memory_region_add_subregion_overlap()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L2656)来向一个**container MemoryRegion**中插入和其他**子MemoryRegion**交叠的MemoryRegion并声明优先级，如下所示
+但是考虑到诸如pcie设备的地址空间是动态分配的，因此允许MemoryRegion交叠并通过优先级决定交叠部分的可见性会极大地简化这部分代码。可以通过[**memory_region_add_subregion_overlap()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/memory.c#L2672)来向一个**container MemoryRegion**中插入和其他**子MemoryRegion**交叠的MemoryRegion并声明优先级，如下所示
 
 ```
                    struct MemoryRegion                                         
@@ -337,7 +337,7 @@ struct MemoryRegion {
 
 对于Guest来说，相同的地址可能有不同的意义。例如port IO中的地址和内存中的地址，即使值相同表示的也不是同一个东西。
 
-为此，Qemu使用[**struct AddressSpace**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/exec/memory.h#L1112)来管理不同类型的地址空间，主要包括[**address_space_memory**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L94)和[**address_space_io**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L93)。
+为此，Qemu使用[**struct AddressSpace**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/exec/memory.h#L1112)来管理不同类型的地址空间，主要包括[**address_space_memory**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/physmem.c#L94)和[**address_space_io**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/physmem.c#L93)。
 
 ## struct AddressSpace
 
@@ -366,7 +366,7 @@ struct AddressSpace {
 
 ## FlatView
 
-Qemu处理Guest的内存操作时，都是基于对应**AddressSpace**，找到地址对应的**MemoryRegion**，完成最终的内存操作模拟。但考虑到**MemoryRegion**的树状结构，需要进行大量的计算才能获取地址实际对应的**MemoryRegion**。为了提高效率，Qemu在**AddressSpace**中添加了[**FlatView**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/exec/memory.h#L1134)来加快地址查找，其结构如下所示。
+Qemu处理Guest的内存操作时，都是基于对应**AddressSpace**，找到地址对应的**MemoryRegion**，完成最终的内存操作模拟。但考虑到**MemoryRegion**的树状结构，需要进行大量的计算才能获取地址实际对应的**MemoryRegion**。为了提高效率，Qemu在**AddressSpace**中添加了[**FlatView**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/exec/memory.h#L1134)来加快地址查找，其结构如下所示。
 
 ```c
 /* Flattened global view of current active memory hierarchy.  Kept in sorted
@@ -395,7 +395,7 @@ struct FlatRange {
 };
 ```
 
-具体来说，**FlatView**由数个互相不重合的[**struct FlatRange**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L219)构成，每一个**FlatRange**包含地址空间和其实际对应的**MemoryRegion**，从而能表示**AddressSpace**中树状**MemoryRegion**经过平坦化后的最终线性地址空间，如下所示。
+具体来说，**FlatView**由数个互相不重合的[**struct FlatRange**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/memory.c#L219)构成，每一个**FlatRange**包含地址空间和其实际对应的**MemoryRegion**，从而能表示**AddressSpace**中树状**MemoryRegion**经过平坦化后的最终线性地址空间，如下所示。
 
 ```
                                                                                            ┌─────────────────────────────────────────┐                               
@@ -482,7 +482,7 @@ struct FlatRange {
                                                                  └────────────────────────────────────────────────────────────────────────────────────────────────┘  
 ```
 
-而Qemu通过[**address_space_update_topology()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L1100)生成**AddressSpace**对应的**FlatView**
+而Qemu通过[**address_space_update_topology()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/memory.c#L1100)生成**AddressSpace**对应的**FlatView**
 ```c
 static void address_space_update_topology(AddressSpace *as)
 {
@@ -632,13 +632,13 @@ static void flatview_simplify(FlatView *view)
 }
 ```
 
-可以看到，生成**FlatView**整体可分为两步，首先通过[**memory_region_get_flatview_root()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L708)获取**AddressSpace**对应的**树状MemoryRegion**根，其次通过[**generate_memory_topology()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/memory.c#L753)平坦化地址空间。
+可以看到，生成**FlatView**整体可分为两步，首先通过[**memory_region_get_flatview_root()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/memory.c#L708)获取**AddressSpace**对应的**树状MemoryRegion**根，其次通过[**generate_memory_topology()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/memory.c#L753)平坦化地址空间。
 
 其中**generate_memory_topology**的逻辑也相对比较清晰:通过**DFS**遍历整棵树即可平坦化。
 
 ## 内存分派
 
-虽然Qemu已经通过**FlatView**加快了**AddressSpace**地址对应的**MemoryRegion**的查找，但还可以使用[**struct AddressSpaceDispatch**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L130)以类似页表的形式进一步加快查找
+虽然Qemu已经通过**FlatView**加快了**AddressSpace**地址对应的**MemoryRegion**的查找，但还可以使用[**struct AddressSpaceDispatch**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/physmem.c#L130)以类似页表的形式进一步加快查找
 
 ```c
 struct AddressSpaceDispatch {
@@ -702,7 +702,7 @@ typedef struct PhysPageMap {
 } PhysPageMap;
 ```
 
-Qemu使用[**address_space_lookup_region()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/physmem.c#L336)完成地址分派，逻辑如下所示
+Qemu使用[**address_space_lookup_region()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/physmem.c#L336)完成地址分派，逻辑如下所示
 ```c
 /* Called from RCU critical section */
 static MemoryRegionSection *address_space_lookup_region(AddressSpaceDispatch *d,

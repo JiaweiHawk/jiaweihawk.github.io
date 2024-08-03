@@ -50,7 +50,7 @@ categories: ['虚拟化']
 
 ### struct TypeInfo
 
-**QOM**中使用[**struct TypeInfo**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L412)描述诸如类的名称、父类名称、实例大小和静态成员情况
+**QOM**中使用[**struct TypeInfo**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qom/object.h#L474)描述诸如类的名称、父类名称、实例大小和静态成员情况
 
 ```c
 /**
@@ -120,7 +120,7 @@ struct TypeInfo
 
 **QOM**使用用户自定义的**Class**结构体描述诸如函数表、静态成员等类的静态内容，因此所有的对象只能共享一份**Class**结构体和**struct TypeInfo**数据。
 
-考虑到类会继承父类的成员内容，因此需要在**Class**结构体中包含父类的**Class**数据来实现继承关系。同时为了能安全的实现面向对象编程中的向上转型，总是将父类的数据放在**Class**结构体的最开始，如[**struct PCIDeviceClass**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/hw/pci/pci_device.h#L24)所示。
+考虑到类会继承父类的成员内容，因此需要在**Class**结构体中包含父类的**Class**数据来实现继承关系。同时为了能安全的实现面向对象编程中的向上转型，总是将父类的数据放在**Class**结构体的最开始，如[**struct PCIDeviceClass**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/pci/pci_device.h#L24)所示。
 
 ```c
 /*
@@ -163,7 +163,7 @@ struct PCIDeviceClass {
 
 **QOM**使用用户自定义的**Object**结构体描述非静态成员，也就是对象的数据，因此所有的对象都有自己的**Object**结构数据。
 
-类似于**Class**结构体，考虑到对象同样会继承父类对象的成员内容，因此需要在**Object**结构体中包含父类的**Object**数据来实现继承，父类的数据同样应放在**Object**结构体的最开始以实现向上转型，如[**struct PCIDevice**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/hw/pci/pci_device.h#L56)所示。
+类似于**Class**结构体，考虑到对象同样会继承父类对象的成员内容，因此需要在**Object**结构体中包含父类的**Object**数据来实现继承，父类的数据同样应放在**Object**结构体的最开始以实现向上转型，如[**struct PCIDevice**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/pci/pci_device.h#L56)所示。
 
 ```c
 /*
@@ -206,7 +206,7 @@ struct PCIDevice {
 
 - 注册类
 
-    **QOM**使用[**type_init**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/module.h#L56)宏注册类信息，如下所示
+    **QOM**使用[**type_init**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qemu/module.h#L56)宏注册类信息，如下所示
 
     ```c
     /*
@@ -262,7 +262,7 @@ struct PCIDevice {
 
 - 生成**struct TypeImpl**
 
-    在`main()`中，`init_type_list[MODULE_INIT_QOM]`链表上所有的之前插入的用户自定义函数都会在[**module_call_init()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/module.c#L97)中执行，调用栈如下所示
+    在`main()`中，`init_type_list[MODULE_INIT_QOM]`链表上所有的之前插入的用户自定义函数都会在[**module_call_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/module.c#L97)中执行，调用栈如下所示
     ```c
     /*
      * #0  type_register_static (info=0x555556ea5540 <pci_device_type_info>) at ../../qemu/qom/object.c:195
@@ -277,7 +277,7 @@ struct PCIDevice {
      */
     ```
 
-    用户自定义函数通过[**type_register_static()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L156)生成[**struct TypeImpl**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L49)数据，并将其插入到一个全局**GHashTable**中，如下所示。随后可以通过类的名称调用[**type_table_lookup**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L99)获取**struct TypeImpl**数据，**struct TypeImpl**数据包含了**struct TypeInfo**数据和**Class**结构体数据(此时还未初始化)，也就是类的全部信息。
+    用户自定义函数通过[**type_register_static()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L193)生成[**struct TypeImpl**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L49)数据，并将其插入到一个全局**GHashTable**中，如下所示。随后可以通过类的名称调用[**type_table_lookup**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L99)获取**struct TypeImpl**数据，**struct TypeImpl**数据包含了**struct TypeInfo**数据和**Class**结构体数据(此时还未初始化)，也就是类的全部信息。
     ```c
     /*
      * #0  type_register_internal (info=0x555556ea5540 <pci_device_type_info>) at ../../qemu/qom/object.c:176
@@ -355,7 +355,7 @@ struct PCIDevice {
     ```
 
 - 初始化**Class**结构体
-    这里初始化类的最后一部分数据，即**Class**结构体。其往往在生成**struct TypeImpl**之后且对象初始化之前通过[**type_initialize()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L300)进行，如下所示
+    这里初始化类的最后一部分数据，即**Class**结构体。其往往在生成**struct TypeImpl**之后且对象初始化之前通过[**type_initialize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L337)进行，如下所示
     ```c
     /*
      * #0  pci_device_class_init (klass=0x555557108080, data=0x0) at ../../qemu/hw/pci/pci.c:2630
@@ -411,7 +411,7 @@ struct PCIDevice {
 ### 对象初始化
 
 根据[前面章节](#对象)的介绍，**QOM**使用**Object**结构体来描述对象，则对象的初始化也就是该数据结构的初始化。
-**QOM**根据对象的类名称调用**type_table_lookup()**获取类对应的**struct TypeImpl**，然后使用[**object_initialize_with_type()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L520)来创建并初始化一个对象实例，如下所示
+**QOM**根据对象的类名称调用**type_table_lookup()**获取类对应的**struct TypeImpl**，然后使用[**object_initialize_with_type()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L557)来创建并初始化一个对象实例，如下所示
 
 ```c
 /*
@@ -484,7 +484,7 @@ static void object_post_init_with_type(Object *obj, TypeImpl *ti)
 
 ## 类型转换
 
-**QOM**同样实现了面向对象编程中的cast概念。根据[类](#类)和[对象](#对象)章节的介绍，相关结构体在起始偏移处存放了父类的结构体，因此向上转型始终是安全的；而为了实现向下转型，**QOM**通过[**OBJECT_DECLARE_TYPE()**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L233)宏声明了诸多的helper函数，如下所示
+**QOM**同样实现了面向对象编程中的cast概念。根据[类](#类)和[对象](#对象)章节的介绍，相关结构体在起始偏移处存放了父类的结构体，因此向上转型始终是安全的；而为了实现向下转型，**QOM**通过[**OBJECT_DECLARE_TYPE()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qom/object.h#L233)宏声明了诸多的helper函数，如下所示
 
 ```c
 /**
@@ -610,7 +610,7 @@ static void object_post_init_with_type(Object *obj, TypeImpl *ti)
 ```
 可以看到，**QOM**提供了**OBJ_NAME()**将任何一个**struct Object**转换为**Object**结构体、**OBJ_NAME##_GET_CLASS()**从**struct Object**提取**Class**结构体和**OBJ_NAME##_CLASS**从**struct ObjectClass**转换为**Class**结构体的函数。
 
-由于**struct Object**的**class**字段指向对应的**struct ObjectClass**，而**struct ObjectClass**的**type**字段指向真实的**struct TypeImpl**内容,基于此，**QOM**通过[**object_dynamic_cast_assert()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L884)和[**object_class_dynamic_cast_assert()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L971)，检查目标类或对象是否为这些指针的祖先从而进行安全的转换，如下所示
+由于**struct Object**的**class**字段指向对应的**struct ObjectClass**，而**struct ObjectClass**的**type**字段指向真实的**struct TypeImpl**内容,基于此，**QOM**通过[**object_dynamic_cast_assert()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L921)和[**object_class_dynamic_cast_assert()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L1008)，检查目标类或对象是否为这些指针的祖先从而进行安全的转换，如下所示
 
 ```c
 Object *object_dynamic_cast_assert(Object *obj, const char *typename,
@@ -752,7 +752,7 @@ out:
 ```
 
 ## 属性
-类似于linux中的sysfs，考虑到**QOM**的每个类的**Class**结构体基类是[**struct ObjectClass**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L127)，每个对象的**Object**结构体基类是[**Object**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L153)，为了提供一套类和对象的公用对外接口，**QOM**为**struct ObjectClass**和**struct Object**添加了**properties**域，即属性名称到[**struct ObjectProperty**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qom/object.h#L88)的哈希表，如下所示
+类似于linux中的sysfs，考虑到**QOM**的每个类的**Class**结构体基类是[**struct ObjectClass**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qom/object.h#L127)，每个对象的**Object**结构体基类是[**Object**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qom/object.h#L153)，为了提供一套类和对象的公用对外接口，**QOM**为**struct ObjectClass**和**struct Object**添加了**properties**域，即属性名称到[**struct ObjectProperty**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qom/object.h#L88)的哈希表，如下所示
 ```c
 struct ObjectProperty
 {
@@ -837,7 +837,7 @@ struct ObjectClass        ├─────────────┤
                                                struct BoolProperty
 ```
 
-**QOM**分别使用[**object_class_property_find()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1362)、[**object_class_property_add()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1284)和[**object_property_find()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1311)、[**object_property_add()**](https://elixir.bootlin.com/qemu/v8.2.2/source/qom/object.c#L1273)来查找和设置这些属性，如下所示
+**QOM**分别使用[**object_class_property_find()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L1399)、[**object_class_property_add()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L1321)和[**object_property_find()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L1348)、[**object_property_add()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qom/object.c#L1310)来查找和设置这些属性，如下所示
 ```c
 ObjectProperty *object_class_property_find(ObjectClass *klass, const char *name)
 {
@@ -1000,7 +1000,7 @@ object_property_try_add(Object *obj, const char *name, const char *type,
 
 ### struct QemuOptsList
 
-**QEMU**将所有参数分成了几个大选项，如`-nic`、`-cpu`等，每一个大选项使用结构体[**struct QemuOptsList**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/option.h#L64)表示
+**QEMU**将所有参数分成了几个大选项，如`-nic`、`-cpu`等，每一个大选项使用结构体[**struct QemuOptsList**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qemu/option.h#L64)表示
 ```c
 struct QemuOptsList {
     const char *name;
@@ -1027,7 +1027,7 @@ QemuOptsList qemu_nic_opts = {
 
 ### struct QemuOpt
 
-每个**struct QemuOptsList**大选项下还支持多个小选项，如`-nic`下的`user`和`model`等小选项，每个小选项由[**struct QemuOpt**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/option_int.h#L32)表示
+每个**struct QemuOptsList**大选项下还支持多个小选项，如`-nic`下的`user`和`model`等小选项，每个小选项由[**struct QemuOpt**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qemu/option_int.h#L32)表示
 ```c
 struct QemuOpt {
     char *name;
@@ -1047,7 +1047,7 @@ struct QemuOpt {
 
 ### struct QemuOpts
 
-[**struct QemuOpts**](https://elixir.bootlin.com/qemu/v8.2.2/source/include/qemu/option_int.h#L46)用于连接**struct QemuOpt**和**struct QemuOptsList**，可以理解为一个大选项的实例
+[**struct QemuOpts**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qemu/option_int.h#L46)用于连接**struct QemuOpt**和**struct QemuOptsList**，可以理解为一个大选项的实例
 ```c
 struct QemuOpts {
     char *id;
@@ -1060,7 +1060,7 @@ struct QemuOpts {
 
 ## 解析
 
-**QEMU**会在[**qemu_init()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/vl.c#L2737)中解析命令行参数，并填充相关的数据结构
+**QEMU**会在[**qemu_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/vl.c#L2734)中解析命令行参数，并填充相关的数据结构
 ```c
 void qemu_init(int argc, char **argv)
 {
@@ -1114,9 +1114,9 @@ void qemu_init(int argc, char **argv)
 }
 ```
 
-**QEMU**首先在[**lookup_opt()**](https://elixir.bootlin.com/qemu/v8.2.2/source/system/vl.c#L1619)中解析出所属的大选项，然后再继续解析出一个大选项的实例**struct QemuOpts**。
+**QEMU**首先在[**lookup_opt()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/vl.c#L1618)中解析出所属的大选项，然后再继续解析出一个大选项的实例**struct QemuOpts**。
 
-以`-nic`大选项为例，其在[**net_client_parse()**](https://elixir.bootlin.com/qemu/v8.2.2/source/net/net.c#L1759)中解析出**struct QemuOpts**并插入在**nic**对应的**struct QemuOptsList**中，如下所示
+以`-nic`大选项为例，其在[**net_client_parse()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1920)中解析出**struct QemuOpts**并插入在**nic**对应的**struct QemuOptsList**中，如下所示
 ```c
 static bool opts_do_parse(QemuOpts *opts, const char *params,
                           const char *firstname,
@@ -1215,7 +1215,7 @@ void net_client_parse(QemuOptsList *opts_list, const char *optstr)
 }
 ```
 
-可以看到，**QEMU**在[**opts_parse()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/qemu-option.c#L881)中使用[**qemu_opts_create()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/qemu-option.c#L608)创建**struct QemuOpts**实例并插入到**struct QemuOptsList**中，然后使用[**opts_do_parse()**](https://elixir.bootlin.com/qemu/v8.2.2/source/util/qemu-option.c#L799)解析所有**struct QemuOpt**并插入到**struct QemuOpts**中。
+可以看到，**QEMU**在[**opts_parse()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/qemu-option.c#L881)中使用[**qemu_opts_create()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/qemu-option.c#L608)创建**struct QemuOpts**实例并插入到**struct QemuOptsList**中，然后使用[**opts_do_parse()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/qemu-option.c#L799)解析所有**struct QemuOpt**并插入到**struct QemuOpts**中。
 
 至于检查参数的正确性，则推迟到初始化**nic**设备时在进行即可，如下所示
 ```c
@@ -1310,7 +1310,7 @@ out_obj:
 }
 ```
 
-**QEMU**在**visit_type_Netdev()**完成参数的认证，其通过**visit_type_Netdev_members()**解析**nic**大选项预设的小选项，并将**struct QemuOpts**中剩余的小选项当做非法小选项即可。其中**visit_type_Netdev()**函数是通过[**qapi-gen.py**](https://elixir.bootlin.com/qemu/v8.2.2/source/scripts/qapi-gen.py)基于[**net.json**](https://elixir.bootlin.com/qemu/v8.2.2/source/qapi/net.json#L97)自动生成的函数。
+**QEMU**在**visit_type_Netdev()**完成参数的认证，其通过**visit_type_Netdev_members()**解析**nic**大选项预设的小选项，并将**struct QemuOpts**中剩余的小选项当做非法小选项即可。其中**visit_type_Netdev()**函数是通过[**qapi-gen.py**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi-gen.py)基于[**net.json**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/net.json#L97)自动生成的函数。
 
 # 参考
 
