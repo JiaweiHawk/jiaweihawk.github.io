@@ -352,7 +352,176 @@ static void i440fx_pcihost_realize(DeviceState *dev, Error **errp)
 ```
 可以看到，确实如前面[对象初始化](#对象初始化)中分析的，是在实例化中绑定的**MemoryRegion**
 
-## ~~PCI总线~~
+## PCI总线
+
+根据前面[PCI设备编号](#pci设备编号)可知，由总线编号、设备编号和功能编号可唯一确定一个PCI设备，则PCI总线需要模拟该功能，即通过这些信息能唯一定位一个PCI设备
+
+Qemu中表示PCI总线的**TypeInfo**变量[**struct pci_bus_info**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L219)如下所示
+```c
+static const TypeInfo pci_bus_info = {
+    .name = TYPE_PCI_BUS,
+    .parent = TYPE_BUS,
+    .instance_size = sizeof(PCIBus),
+    .class_size = sizeof(PCIBusClass),
+    .class_init = pci_bus_class_init,
+};
+```
+
+### 数据结构
+
+Qemu使用[**struct PCIBusClass**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/pci/pci_bus.h#L13)和[**struct PCIBus**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/pci/pci_bus.h#L33)来表征PCI总线
+
+#### struct PCIBusClass
+
+```c
+/*
+ * PCI Bus datastructures.
+ *
+ * Do not access the following members directly;
+ * use accessor functions in pci.h
+ */
+
+struct PCIBusClass {
+    /*< private >*/
+    BusClass parent_class;
+    /*< public >*/
+
+    int (*bus_num)(PCIBus *bus);
+    uint16_t (*numa_node)(PCIBus *bus);
+};
+```
+其主要包含一些成员变量的访问函数
+
+#### struct PCIBus
+
+```c
+struct PCIBus {
+    BusState qbus;
+    enum PCIBusFlags flags;
+    const PCIIOMMUOps *iommu_ops;
+    void *iommu_opaque;
+    uint8_t devfn_min;
+    uint32_t slot_reserved_mask;
+    pci_set_irq_fn set_irq;
+    pci_map_irq_fn map_irq;
+    pci_route_irq_fn route_intx_to_irq;
+    void *irq_opaque;
+    PCIDevice *devices[PCI_SLOT_MAX * PCI_FUNC_MAX];
+    PCIDevice *parent_dev;
+    MemoryRegion *address_space_mem;
+    MemoryRegion *address_space_io;
+
+    QLIST_HEAD(, PCIBus) child; /* this will be replaced by qdev later */
+    QLIST_ENTRY(PCIBus) sibling;/* this will be replaced by qdev later */
+
+    /* The bus IRQ state is the logical OR of the connected devices.
+       Keep a count of the number of devices with raised IRQs.  */
+    int nirq;
+    int *irq_count;
+
+    Notifier machine_done;
+};
+```
+其除了保存挂载的设备**devices**外，还记录了子总线**child**
+
+### 初始化
+
+根据[pci总线](#pci总线)中的**pci_bus_info**可知，PCI总线只有[**pci_bus_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L201)来进行对象初始化。
+
+#### 对象初始化
+
+```c
+static void pci_bus_class_init(ObjectClass *klass, void *data)
+{
+    BusClass *k = BUS_CLASS(klass);
+    PCIBusClass *pbc = PCI_BUS_CLASS(klass);
+    ResettableClass *rc = RESETTABLE_CLASS(klass);
+
+    k->print_dev = pcibus_dev_print;
+    k->get_dev_path = pcibus_get_dev_path;
+    k->get_fw_dev_path = pcibus_get_fw_dev_path;
+    k->realize = pci_bus_realize;
+    k->unrealize = pci_bus_unrealize;
+
+    rc->phases.hold = pcibus_reset_hold;
+
+    pbc->bus_num = pcibus_num;
+    pbc->numa_node = pcibus_numa_node;
+}
+```
+可以看到，其主要初始化了相关的函数指针，而这些函数指针会用于定位PCI设备，如下所示
+```c
+/*
+ * PCI address
+ * bit 16 - 24: bus number
+ * bit  8 - 15: devfun number
+ * bit  0 -  7: offset in configuration space of a given pci device
+ */
+
+/* the helper function to get a PCIDevice* for a given pci address */
+static inline PCIDevice *pci_dev_find_by_addr(PCIBus *bus, uint32_t addr)
+{
+    uint8_t bus_num = addr >> 16;
+    uint8_t devfn = addr >> 8;
+
+    return pci_find_device(bus, bus_num, devfn);
+}
+
+PCIDevice *pci_find_device(PCIBus *bus, int bus_num, uint8_t devfn)
+{
+    bus = pci_find_bus_nr(bus, bus_num);
+
+    if (!bus)
+        return NULL;
+
+    return bus->devices[devfn];
+}
+
+PCIBus *pci_find_bus_nr(PCIBus *bus, int bus_num)
+{
+    PCIBus *sec;
+
+    if (!bus) {
+        return NULL;
+    }
+
+    if (pci_bus_num(bus) == bus_num) {
+        return bus;
+    }
+
+    /* Consider all bus numbers in range for the host pci bridge. */
+    if (!pci_bus_is_root(bus) &&
+        !pci_secondary_bus_in_range(bus->parent_dev, bus_num)) {
+        return NULL;
+    }
+
+    /* try child bus */
+    for (; bus; bus = sec) {
+        QLIST_FOREACH(sec, &bus->child, sibling) {
+            if (pci_bus_num(sec) == bus_num) {
+                return sec;
+            }
+            /* PXB buses assumed to be children of bus 0 */
+            if (pci_bus_is_root(sec)) {
+                if (pci_root_bus_in_range(sec, bus_num)) {
+                    break;
+                }
+            } else {
+                if (pci_secondary_bus_in_range(sec->parent_dev, bus_num)) {
+                    break;
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+
+int pci_bus_num(PCIBus *s)
+{
+    return PCI_BUS_GET_CLASS(s)->bus_num(s);
+}
+```
 
 ## ~~PCI设备~~
 
