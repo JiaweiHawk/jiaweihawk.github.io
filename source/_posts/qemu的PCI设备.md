@@ -546,7 +546,7 @@ int pci_bus_num(PCIBus *s)
 
 这里就以**e1000**为例，通过分析其代码来学习Qemu对于PCI设备的模拟逻辑
 
-根据[*e1000_register_types()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/e1000.c#L1763)的逻辑，其**struct TypeInfo**如下所示
+根据[**e1000_register_types()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/e1000.c#L1763)的逻辑，其**struct TypeInfo**如下所示
 ```c
 static const TypeInfo device_type_info = {
     .name = TYPE_DEVICE,
