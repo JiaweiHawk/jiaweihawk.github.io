@@ -1284,9 +1284,328 @@ DeviceState *qdev_device_add_from_qdict(const QDict *opts,
 
 其中，在[**qdev_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L280)和[**do_pci_register_device()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L280)中完成了**PCI设备**的编号，从而可以让前面介绍的[PCI桥](#对象初始化-1)根据PCI设备编号定位**PCI设备**
 
-除此之外，[pci_e1000_realize()](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/e1000.c#L1637)还初始化了其**PCI设置空间**，包括**配置空间头**(**config**字段)、**mmio bar**和**pio bar**。但需要注意的是，这里仅仅是初始化了**bar**的相关数据结构，但并没有映射到设备的地址空间，也就是**guest**此时是看不到**bar**对应的地址空间，需要后续**guest**配置完**PCI设置空间**后才会完成映射。
+除此之外，[pci_e1000_realize()](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/e1000.c#L1637)还初始化了其**PCI设置空间**，包括**配置空间头**(**config**字段)、**mmio bar**和**pio bar**。但需要注意的是，这里仅仅是初始化了**bar**的相关数据结构，但并没有映射到设备的地址空间，**guest**此时是看不到**bar**对应的地址空间，即从**AddressSpace**是找到不到该**MemoryRegion**的，需要后续**guest**配置完**PCI设置空间**后才会完成映射。具体来说，其通过[**pci_register_bar()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L1301)，向**PCIDevice**的**io_regions**字段注册了**BAR**的[**struct PCIIORegion**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/pci/pci.h#L143)的数据结构，但并未将这部分地址空间的**MemoryRegion**映射到对应的**AddressSpace**上，其会推迟到**guest**完成设备的**PCI设置空间**的配置后在进行映射，所以此时Qemu在处理**guest**对这部分地址空间的请求时并不会分派到上述的**MemoryRegion**中。
+```c
+void pci_register_bar(PCIDevice *pci_dev, int region_num,
+                      uint8_t type, MemoryRegion *memory)
+{
+    PCIIORegion *r;
+    uint32_t addr; /* offset in pci config space */
+    uint64_t wmask;
+    pcibus_t size = memory_region_size(memory);
+    uint8_t hdr_type;
+    ...
+    r = &pci_dev->io_regions[region_num];
+    r->addr = PCI_BAR_UNMAPPED;
+    r->size = size;
+    r->type = type;
+    r->memory = memory;
+    r->address_space = type & PCI_BASE_ADDRESS_SPACE_IO
+                        ? pci_get_bus(pci_dev)->address_space_io
+                        : pci_get_bus(pci_dev)->address_space_mem;
 
-### ~~PCI配置~~
+    wmask = ~(size - 1);
+    if (region_num == PCI_ROM_SLOT) {
+        /* ROM enable bit is writable */
+        wmask |= PCI_ROM_ADDRESS_ENABLE;
+    }
+
+    addr = pci_bar(pci_dev, region_num);
+    pci_set_long(pci_dev->config + addr, type);
+
+    if (!(r->type & PCI_BASE_ADDRESS_SPACE_IO) &&
+        r->type & PCI_BASE_ADDRESS_MEM_TYPE_64) {
+        pci_set_quad(pci_dev->wmask + addr, wmask);
+        pci_set_quad(pci_dev->cmask + addr, ~0ULL);
+    } else {
+        pci_set_long(pci_dev->wmask + addr, wmask & 0xffffffff);
+        pci_set_long(pci_dev->cmask + addr, 0xffffffff);
+    }
+}
+```
+
+### PCI配置
+
+此刻Qemu已经准备好**e1000**模拟设备的所有数据信息，可以模拟**e1000**设备与**guest**进行交互，首先就是**e1000**设备的**PCI设置空间**的配置
+
+#### 指定设备
+
+根据前面[PCI配置空间](#PCI配置空间)和[PCIHost对象初始化](#对象初始化)可知，Qemu使用[**pci_host_config_write()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci_host.c#L158)来模拟Qemu对**CONFIG_ADDRESS**寄存器的写操作，从而指定后续**PCI配置**的**PCI设备**，如下所示
+```c
+//#0  pci_host_config_write (opaque=0x5555573de7c0, addr=0, val=2147489796, len=4) at ../../qemu/hw/pci/pci_host.c:161
+//#1  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555573deaf0, addr=0, value=0x7ffff6954598, size=4, shift=0, mask=4294967295, attrs=...) at ../../qemu/system/memory.c:497
+//#2  0x0000555555e19d39 in access_with_adjusted_size (addr=0, value=0x7ffff6954598, size=4, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555573deaf0, attrs=...) at ../../qemu/system/memory.c:573
+//#3  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555573deaf0, addr=0, data=2147489796, op=MO_32, attrs=...) at ../../qemu/system/memory.c:1521
+//#4  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f8a000 "\004\030", len=4, mr_addr=0, l=0x7ffff6954680, mr=0x5555573deaf0) at ../../qemu/system/physmem.c:2713
+//#5  0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee828b430, addr=3320, attrs=..., ptr=0x7ffff7f8a000, len=4, mr_addr=0, l=4, mr=0x5555573deaf0) at ../../qemu/system/physmem.c:2743
+//#6  0x0000555555e2b982 in flatview_write (fv=0x7ffee828b430, addr=3320, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2774
+//#7  0x0000555555e2bdd0 in address_space_write (as=0x55555704dc80 <address_space_io>, addr=3320, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2894
+//#8  0x0000555555e2be4c in address_space_rw (as=0x55555704dc80 <address_space_io>, addr=3320, attrs=..., buf=0x7ffff7f8a000, len=4, is_write=true) at ../../qemu/system/physmem.c:2904
+//#9  0x0000555555e85476 in kvm_handle_io (port=3320, attrs=..., data=0x7ffff7f8a000, direction=1, size=4, count=1) at ../../qemu/accel/kvm/kvm-all.c:2631
+//#10 0x0000555555e85de6 in kvm_cpu_exec (cpu=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-all.c:2903
+//#11 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#12 0x00005555560b2687 in qemu_thread_start (args=0x5555573aa760) at ../../qemu/util/qemu-thread-posix.c:541
+//#13 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#14 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+static void pci_host_config_write(void *opaque, hwaddr addr,
+                                  uint64_t val, unsigned len)
+{
+    PCIHostState *s = opaque;
+
+    PCI_DPRINTF("%s addr " HWADDR_FMT_plx " len %d val %"PRIx64"\n",
+                __func__, addr, len, val);
+    if (addr != 0 || len != 4) {
+        return;
+    }
+    s->config_reg = val;
+}
+```
+可以看到，**guest**产生了IO事件，Qemu使用[**kvm_handle_io()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/accel/kvm/kvm-all.c#L2624)进行模拟。其在**address_space_io**找到前面[i440fx_pcihost实例化](#实例化)时映射的**MemoryRegion**，并执行其**write**回调函数即**pci_host_config_write()**即可。
+
+而对应的**guest**则是调用[**outl()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/arch/x86/include/asm/shared/io.h#L32)向**0xcf8**写入对应的地址，如下所示
+```c
+//#0  0xffffffff81eaefc5 in pci_conf1_read (seg=<optimized out>, bus=<optimized out>, devfn=24, reg=4, len=2, value=0xffffc90000013bcc) at /home/hawk/Desktop/mqemu/kernel/arch/x86/pci/direct.c:33
+//#1  0xffffffff81574518 in pci_bus_read_config_word (bus=<optimized out>, devfn=<optimized out>, pos=pos@entry=4, value=value@entry=0xffffc90000013bee) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/access.c:67
+//#2  0xffffffff81574932 in pci_read_config_word (dev=dev@entry=0xffff888100863000, where=where@entry=4, val=val@entry=0xffffc90000013bee) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/access.c:562
+//#3  0xffffffff81588055 in pci_enable_resources (dev=dev@entry=0xffff888100863000, mask=67) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/setup-res.c:490
+//#4  0xffffffff81eb31ad in pcibios_enable_device (dev=0xffff888100863000, mask=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/pci/common.c:695
+//#5  0xffffffff815812d3 in do_pci_enable_device (bars=67, dev=0xffff888100863000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci.c:2022
+//#6  do_pci_enable_device (dev=0xffff888100863000, bars=67) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci.c:2007
+//#7  0xffffffff81582c67 in pci_enable_device_flags (dev=dev@entry=0xffff888100863000, flags=flags@entry=768) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci.c:2107
+//#8  0xffffffff81582cde in pci_enable_device (dev=dev@entry=0xffff888100863000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci.c:2154
+//#9  0xffffffff8199c7c2 in e1000_probe (pdev=0xffff888100863000, ent=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/net/ethernet/intel/e1000/e1000_main.c:940
+//#10 0xffffffff81584ba2 in local_pci_probe (_ddi=_ddi@entry=0xffffc90000013d30) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:324
+//#11 0xffffffff81585add in pci_call_probe (id=<optimized out>, dev=0xffff888100863000, drv=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:392
+//#12 __pci_device_probe (pci_dev=0xffff888100863000, drv=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:417
+//#13 pci_device_probe (dev=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:451
+//#14 0xffffffff818bd81c in call_driver_probe (drv=0xffffffff82bfe808 <e1000_driver+104>, dev=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:578
+//#15 really_probe (dev=dev@entry=0xffff8881008630c0, drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:656
+//#16 0xffffffff818bda8e in __driver_probe_device (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>, dev=dev@entry=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:798
+//#17 0xffffffff818bdb69 in driver_probe_device (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>, dev=dev@entry=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:828
+//#18 0xffffffff818bdde5 in __driver_attach (data=0xffffffff82bfe808 <e1000_driver+104>, dev=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1214
+//#19 __driver_attach (dev=0xffff8881008630c0, data=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1154
+//#20 0xffffffff818bb5b7 in bus_for_each_dev (bus=<optimized out>, start=start@entry=0x0 <fixed_percpu_data>, data=data@entry=0xffffffff82bfe808 <e1000_driver+104>, fn=fn@entry=0xffffffff818bdd60 <__driver_attach>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:368
+//#21 0xffffffff818bd1f9 in driver_attach (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1231
+//#22 0xffffffff818bc997 in bus_add_driver (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:673
+//#23 0xffffffff818bef8b in driver_register (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/driver.c:246
+//#24 0xffffffff8158447c in __pci_register_driver (drv=drv@entry=0xffffffff82bfe7a0 <e1000_driver>, owner=owner@entry=0x0 <fixed_percpu_data>, mod_name=mod_name@entry=0xffffffff827051f5 "e1000") at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:1450
+//#25 0xffffffff832a4c31 in e1000_init_module () at /home/hawk/Desktop/mqemu/kernel/drivers/net/ethernet/intel/e1000/e1000_main.c:227
+//#26 0xffffffff81001a63 in do_one_initcall (fn=0xffffffff832a4bf0 <e1000_init_module>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1238
+//#27 0xffffffff832481d7 in do_initcall_level (command_line=0xffff888100333140 "rdinit", level=6) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1300
+//#28 do_initcalls () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1316
+//#29 do_basic_setup () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1335
+//#30 kernel_init_freeable () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1548
+//#31 0xffffffff81ee5285 in kernel_init (unused=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1437
+//#32 0xffffffff8103be2f in ret_from_fork (prev=<optimized out>, regs=0xffffc90000013f58, fn=0xffffffff81ee5270 <kernel_init>, fn_arg=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/process.c:147
+//#33 0xffffffff8100244a in ret_from_fork_asm () at /home/hawk/Desktop/mqemu/kernel/arch/x86/entry/entry_64.S:243
+//#34 0x0000000000000000 in ?? ()
+#define BUILDIO(bwl, bw, type)						\
+static __always_inline void __out##bwl(type value, u16 port)		\
+{									\
+	asm volatile("out" #bwl " %" #bw "0, %w1"			\
+		     : : "a"(value), "Nd"(port));			\
+}									\
+...
+BUILDIO(l,  , u32)
+...
+#define outl __outl
+
+static int pci_conf1_read(unsigned int seg, unsigned int bus,
+			  unsigned int devfn, int reg, int len, u32 *value)
+{
+	unsigned long flags;
+
+	if (seg || (bus > 255) || (devfn > 255) || (reg > 4095)) {
+		*value = -1;
+		return -EINVAL;
+	}
+
+	raw_spin_lock_irqsave(&pci_config_lock, flags);
+
+	outl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+
+	switch (len) {
+	case 1:
+		*value = inb(0xCFC + (reg & 3));
+		break;
+	case 2:
+		*value = inw(0xCFC + (reg & 2));
+		break;
+	case 4:
+		*value = inl(0xCFC);
+		break;
+	}
+
+	raw_spin_unlock_irqrestore(&pci_config_lock, flags);
+
+	return 0;
+}
+```
+可以看到，**guest**在访问**PCI**设备配置空间时，首先获取**pci_config_lock**锁，首先通过`outl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8)`设定**CONFIG_ADDRESS**，指定访问的PCI设备。然后在访问**CONFIG_DATA**寄存器访问数据即可。
+
+#### 访问配置空间
+
+在指定完**CONFIG_ADDRESS**寄存器后，即可通过**pio**访问指定的**PCI设备**的配置空间了。根据前面[PCI配置空间](#PCI配置空间)和[PCIHost对象初始化](#对象初始化)可知，Qemu使用[**pci_host_data_read()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci_host.c#L191)/[**pci_host_data_write()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci_host.c#L182)来模拟Qemu对**CONFIG_DATA**寄存器的访问操作，如下是一个写操作的例子。
+```c
+//#0  pci_host_data_write (opaque=0x5555573de7c0, addr=0, val=263, len=2) at ../../qemu/hw/pci/pci_host.c:187
+//#1  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555573dec00, addr=0, value=0x7ffff6954598, size=2, shift=0, mask=65535, attrs=...) at ../../qemu/system/memory.c:497
+//#2  0x0000555555e19d39 in access_with_adjusted_size (addr=0, value=0x7ffff6954598, size=2, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555573dec00, attrs=...) at ../../qemu/system/memory.c:573
+//#3  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555573dec00, addr=0, data=263, op=MO_16, attrs=...) at ../../qemu/system/memory.c:1521
+//#4  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f8a000 "\a\001", len=2, mr_addr=0, l=0x7ffff6954680, mr=0x5555573dec00) at ../../qemu/system/physmem.c:2713
+//#5  0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee828cfd0, addr=3324, attrs=..., ptr=0x7ffff7f8a000, len=2, mr_addr=0, l=2, mr=0x5555573dec00) at ../../qemu/system/physmem.c:2743
+//#6  0x0000555555e2b982 in flatview_write (fv=0x7ffee828cfd0, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=2) at ../../qemu/system/physmem.c:2774
+//#7  0x0000555555e2bdd0 in address_space_write (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=2) at ../../qemu/system/physmem.c:2894
+//#8  0x0000555555e2be4c in address_space_rw (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=2, is_write=true) at ../../qemu/system/physmem.c:2904
+//#9  0x0000555555e85476 in kvm_handle_io (port=3324, attrs=..., data=0x7ffff7f8a000, direction=1, size=2, count=1) at ../../qemu/accel/kvm/kvm-all.c:2631
+//#10 0x0000555555e85de6 in kvm_cpu_exec (cpu=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-all.c:2903
+//#11 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#12 0x00005555560b2687 in qemu_thread_start (args=0x5555573aa760) at ../../qemu/util/qemu-thread-posix.c:541
+//#13 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#14 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+static void pci_host_data_write(void *opaque, hwaddr addr,
+                                uint64_t val, unsigned len)
+{
+    PCIHostState *s = opaque;
+
+    if (s->config_reg & (1u << 31))
+        pci_data_write(s->bus, s->config_reg | (addr & 3), val, len);
+}
+```
+
+然后其会`s->config_reg`的值，按照前面[PCI总线](#对象初始化-1)介绍的定位到**PCI设备**，并调用**e1000**之前[实例化](#实例化-1)时设置的**config_write**字段[**e1000_write_config**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/e1000.c#L1624)设置其**配置空间**即可(否则调用**do_pci_register_device**设置的函数指针即可)
+```c
+//#0  e1000_write_config (pci_dev=0x5555580b0870, address=4, val=263, len=2) at ../../qemu/hw/net/e1000.c:1627
+//#1  0x0000555555a9e85a in pci_host_config_write_common (pci_dev=0x5555580b0870, addr=4, limit=256, val=263, len=2) at ../../qemu/hw/pci/pci_host.c:96
+//#2  0x0000555555a9eaa6 in pci_data_write (s=0x555557415420, addr=2147489796, val=263, len=2) at ../../qemu/hw/pci/pci_host.c:138
+//#3  0x0000555555a9ec7b in pci_host_data_write (opaque=0x5555573de7c0, addr=0, val=263, len=2) at ../../qemu/hw/pci/pci_host.c:188
+//#4  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555573dec00, addr=0, value=0x7ffff6954598, size=2, shift=0, mask=65535, attrs=...) at ../../qemu/system/memory.c:497
+//#5  0x0000555555e19d39 in access_with_adjusted_size (addr=0, value=0x7ffff6954598, size=2, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555573dec00, attrs=...) at ../../qemu/system/memory.c:573
+//#6  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555573dec00, addr=0, data=263, op=MO_16, attrs=...) at ../../qemu/system/memory.c:1521
+//#7  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f8a000 "\a\001", len=2, mr_addr=0, l=0x7ffff6954680, mr=0x5555573dec00) at ../../qemu/system/physmem.c:2713
+//#8  0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee828cfd0, addr=3324, attrs=..., ptr=0x7ffff7f8a000, len=2, mr_addr=0, l=2, mr=0x5555573dec00) at ../../qemu/system/physmem.c:2743
+//#9  0x0000555555e2b982 in flatview_write (fv=0x7ffee828cfd0, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=2) at ../../qemu/system/physmem.c:2774
+//#10 0x0000555555e2bdd0 in address_space_write (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=2) at ../../qemu/system/physmem.c:2894
+//#11 0x0000555555e2be4c in address_space_rw (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=2, is_write=true) at ../../qemu/system/physmem.c:2904
+//#12 0x0000555555e85476 in kvm_handle_io (port=3324, attrs=..., data=0x7ffff7f8a000, direction=1, size=2, count=1) at ../../qemu/accel/kvm/kvm-all.c:2631
+//#13 0x0000555555e85de6 in kvm_cpu_exec (cpu=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-all.c:2903
+//#14 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#15 0x00005555560b2687 in qemu_thread_start (args=0x5555573aa760) at ../../qemu/util/qemu-thread-posix.c:541
+//#16 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#17 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+void pci_data_write(PCIBus *s, uint32_t addr, uint32_t val, unsigned len)
+{
+    PCIDevice *pci_dev = pci_dev_find_by_addr(s, addr);
+    uint32_t config_addr = addr & (PCI_CONFIG_SPACE_SIZE - 1);
+
+    if (!pci_dev) {
+        trace_pci_cfg_write("empty", extract32(addr, 16, 8),
+                            extract32(addr, 11, 5), extract32(addr, 8, 3),
+                            config_addr, val);
+        return;
+    }
+
+    pci_host_config_write_common(pci_dev, config_addr, PCI_CONFIG_SPACE_SIZE,
+                                 val, len);
+}
+
+void pci_host_config_write_common(PCIDevice *pci_dev, uint32_t addr,
+                                  uint32_t limit, uint32_t val, uint32_t len)
+{
+    pci_adjust_config_limit(pci_get_bus(pci_dev), &limit);
+    if (limit <= addr) {
+        return;
+    }
+
+    assert(len <= 4);
+    /* non-zero functions are only exposed when function 0 is present,
+     * allowing direct removal of unexposed functions.
+     */
+    if ((pci_dev->qdev.hotplugged && !pci_get_function_0(pci_dev)) ||
+        !pci_dev->has_power || is_pci_dev_ejected(pci_dev)) {
+        return;
+    }
+
+    trace_pci_cfg_write(pci_dev->name, pci_dev_bus_num(pci_dev),
+                        PCI_SLOT(pci_dev->devfn),
+                        PCI_FUNC(pci_dev->devfn), addr, val);
+    pci_dev->config_write(pci_dev, addr, val, MIN(len, limit - addr));
+}
+```
+
+而对应的**guest**则是调用[**outl()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/arch/x86/include/asm/shared/io.h#L32)向**0xcf8**写入对应的地址，如下所示
+```c
+//#0  0xffffffff81eaf11f in pci_conf1_write (seg=<optimized out>, bus=<optimized out>, devfn=24, reg=<optimized out>, len=2, value=263) at /home/hawk/Desktop/mqemu/kernel/arch/x86/pci/direct.c:69
+//#1  0xffffffff81582aea in __pci_set_master (enable=true, dev=0xffff888100863000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci.c:4200
+//#2  pci_set_master (dev=dev@entry=0xffff888100863000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci.c:4253
+//#3  0xffffffff8199c810 in e1000_probe (pdev=0xffff888100863000, ent=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/net/ethernet/intel/e1000/e1000_main.c:952
+//#4  0xffffffff81584ba2 in local_pci_probe (_ddi=_ddi@entry=0xffffc90000013d30) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:324
+//#5  0xffffffff81585add in pci_call_probe (id=<optimized out>, dev=0xffff888100863000, drv=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:392
+//#6  __pci_device_probe (pci_dev=0xffff888100863000, drv=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:417
+//#7  pci_device_probe (dev=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:451
+//#8  0xffffffff818bd81c in call_driver_probe (drv=0xffffffff82bfe808 <e1000_driver+104>, dev=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:578
+//#9  really_probe (dev=dev@entry=0xffff8881008630c0, drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:656
+//#10 0xffffffff818bda8e in __driver_probe_device (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>, dev=dev@entry=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:798
+//#11 0xffffffff818bdb69 in driver_probe_device (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>, dev=dev@entry=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:828
+//#12 0xffffffff818bdde5 in __driver_attach (data=0xffffffff82bfe808 <e1000_driver+104>, dev=0xffff8881008630c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1214
+//#13 __driver_attach (dev=0xffff8881008630c0, data=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1154
+//#14 0xffffffff818bb5b7 in bus_for_each_dev (bus=<optimized out>, start=start@entry=0x0 <fixed_percpu_data>, data=data@entry=0xffffffff82bfe808 <e1000_driver+104>, fn=fn@entry=0xffffffff818bdd60 <__driver_attach>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:368
+//#15 0xffffffff818bd1f9 in driver_attach (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1231
+//#16 0xffffffff818bc997 in bus_add_driver (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:673
+//#17 0xffffffff818bef8b in driver_register (drv=drv@entry=0xffffffff82bfe808 <e1000_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/driver.c:246
+//#18 0xffffffff8158447c in __pci_register_driver (drv=drv@entry=0xffffffff82bfe7a0 <e1000_driver>, owner=owner@entry=0x0 <fixed_percpu_data>, mod_name=mod_name@entry=0xffffffff827051f5 "e1000") at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:1450
+//#19 0xffffffff832a4c31 in e1000_init_module () at /home/hawk/Desktop/mqemu/kernel/drivers/net/ethernet/intel/e1000/e1000_main.c:227
+//#20 0xffffffff81001a63 in do_one_initcall (fn=0xffffffff832a4bf0 <e1000_init_module>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1238
+//#21 0xffffffff832481d7 in do_initcall_level (command_line=0xffff888100333140 "rdinit", level=6) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1300
+//#22 do_initcalls () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1316
+//#23 do_basic_setup () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1335
+//#24 kernel_init_freeable () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1548
+//#25 0xffffffff81ee5285 in kernel_init (unused=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1437
+//#26 0xffffffff8103be2f in ret_from_fork (prev=<optimized out>, regs=0xffffc90000013f58, fn=0xffffffff81ee5270 <kernel_init>, fn_arg=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/process.c:147
+//#27 0xffffffff8100244a in ret_from_fork_asm () at /home/hawk/Desktop/mqemu/kernel/arch/x86/entry/entry_64.S:243
+//#28 0x0000000000000000 in ?? ()
+#define BUILDIO(bwl, bw, type)						\
+static __always_inline void __out##bwl(type value, u16 port)		\
+{									\
+	asm volatile("out" #bwl " %" #bw "0, %w1"			\
+		     : : "a"(value), "Nd"(port));			\
+}									\
+...
+BUILDIO(w, w, u16)
+...
+#define outw __outw
+
+static int pci_conf1_write(unsigned int seg, unsigned int bus,
+			   unsigned int devfn, int reg, int len, u32 value)
+{
+	unsigned long flags;
+
+	if (seg || (bus > 255) || (devfn > 255) || (reg > 4095))
+		return -EINVAL;
+
+	raw_spin_lock_irqsave(&pci_config_lock, flags);
+
+	outl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+
+	switch (len) {
+	case 1:
+		outb((u8)value, 0xCFC + (reg & 3));
+		break;
+	case 2:
+		outw((u16)value, 0xCFC + (reg & 2));
+		break;
+	case 4:
+		outl((u32)value, 0xCFC);
+		break;
+	}
+
+	raw_spin_unlock_irqrestore(&pci_config_lock, flags);
+
+	return 0;
+}
+```
+可以看到，类似前面[指定设备](#指定设备)，在指定访问的PCI设备后，即可通过**in/out**访问**CONFIG_DATA**寄存器访问数据。
+
+#### ~~设置BAR~~
 
 # 参考
 1. [用QEMU来体会PCI/PCIE设备 ](https://www.owalle.com/2021/12/09/qemu-pci/)
