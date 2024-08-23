@@ -52,6 +52,11 @@ PCI配置空间有多种格式，其中所有PCI设备的配置空间都有如�
 这里着重说明一下配置空间头的**BAR(Base Address Register)**寄存器，其用来定义该PCI设备占用的地址空间信息，格式如下所示
 ![BAR格式](BAR格式.png)
 
+操作系统与配置空间头的交互方式为
+- 操作系统向**BAR**写入**所有bit都为1**的值
+- 操作系统读取**BAR**值，并将其翻转并加一，得到的即为该**BAR**所需要的地址空间大小
+- 操作系统从对应地址空间中分配该大小的空间，并将空间地址写入**BAR**，完成**BAR**的设置
+
 # Qemu模拟
 
 根据[PCI总线结构](#PCI总线结构)中的介绍，一个经典的PCI总线包含PCI设备、PCI桥和PCI总线等三部分，则Qemu对这些部分都有相应的模拟。
@@ -1605,7 +1610,337 @@ static int pci_conf1_write(unsigned int seg, unsigned int bus,
 ```
 可以看到，类似前面[指定设备](#指定设备)，在指定访问的PCI设备后，即可通过**in/out**访问**CONFIG_DATA**寄存器访问数据。
 
-#### ~~设置BAR~~
+#### 设置BAR
+
+参考前面[BAR](#PCI配置空间)相关内容，操作系统需要通过与**BAR**交互完成**BAR**的配置，从而将Qemu中**BAR**的**MemoryRegion**映射到**AddressSpace**中
+
+首先，**guest**使用[**__pci_read_base()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/pci/probe.c#L176)读取**PCI设备**的**BAR**内容，获取**BAR**空间的大小等信息，如下所示
+```c
+//#0  __pci_read_base (dev=dev@entry=0xffff8881008e1000, type=type@entry=pci_bar_unknown, res=res@entry=0xffff8881008e13a0, pos=pos@entry=16) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:178
+//#1  0xffffffff815779e2 in pci_read_bases (rom=<optimized out>, howmany=<optimized out>, dev=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:335
+//#2  pci_read_bases (dev=0xffff8881008e1000, howmany=6, rom=48) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:321
+//#3  0xffffffff815781e4 in pci_setup_device (dev=dev@entry=0xffff8881008e1000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:1963
+//#4  0xffffffff81578d6a in pci_scan_device (devfn=24, bus=0xffff888100826000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:2434
+//#5  pci_scan_single_device (devfn=24, bus=0xffff888100826000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:2591
+//#6  pci_scan_single_device (bus=0xffff888100826000, devfn=24) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:2581
+//#7  0xffffffff81578e33 in pci_scan_slot (bus=bus@entry=0xffff888100826000, devfn=devfn@entry=24) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:2678
+//#8  0xffffffff8157a490 in pci_scan_child_bus_extend (bus=bus@entry=0xffff888100826000, available_buses=available_buses@entry=0) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:2897
+//#9  0xffffffff8157a68b in pci_scan_child_bus (bus=bus@entry=0xffff888100826000) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:3011
+//#10 0xffffffff815bf969 in acpi_pci_root_create (root=root@entry=0xffff888100372700, ops=ops@entry=0xffffffff82c71720 <acpi_pci_root_ops>, info=info@entry=0xffff8881003773c0, sysdata=sysdata@entry=0xffff8881003773f8) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/pci_root.c:1066
+//#11 0xffffffff81eb1285 in pci_acpi_scan_root (root=root@entry=0xffff888100372700) at /home/hawk/Desktop/mqemu/kernel/arch/x86/pci/acpi.c:455
+//#12 0xffffffff815bf3f4 in acpi_pci_root_add (device=0xffff88810080a000, not_used=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/pci_root.c:733
+//#13 0xffffffff815b4149 in acpi_scan_attach_handler (device=0xffff88810080a000) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/scan.c:2235
+//#14 acpi_bus_attach (device=0xffff88810080a000, first_pass=0x1 <fixed_percpu_data+1>) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/scan.c:2282
+//#15 0xffffffff818b50c7 in device_for_each_child (parent=parent@entry=0xffff888100809a68, data=data@entry=0xffffc90000013cd8, fn=fn@entry=0xffffffff815b2330 <acpi_dev_for_one_check>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/core.c:4049
+//#16 0xffffffff815b2147 in acpi_dev_for_each_child (adev=adev@entry=0xffff888100809800, fn=fn@entry=0xffffffff815b4010 <acpi_bus_attach>, data=data@entry=0x1 <fixed_percpu_data+1>) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/bus.c:1138
+//#17 0xffffffff815b408f in acpi_bus_attach (device=0xffff888100809800, first_pass=0x1 <fixed_percpu_data+1>) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/scan.c:2302
+//#18 0xffffffff818b50c7 in device_for_each_child (parent=parent@entry=0xffff888100809268, data=data@entry=0xffffc90000013d70, fn=fn@entry=0xffffffff815b2330 <acpi_dev_for_one_check>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/core.c:4049
+//#19 0xffffffff815b2147 in acpi_dev_for_each_child (adev=adev@entry=0xffff888100809000, fn=fn@entry=0xffffffff815b4010 <acpi_bus_attach>, data=data@entry=0x1 <fixed_percpu_data+1>) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/bus.c:1138
+//#20 0xffffffff815b408f in acpi_bus_attach (device=0xffff888100809000, first_pass=first_pass@entry=0x1 <fixed_percpu_data+1>) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/scan.c:2302
+//#21 0xffffffff815b68a7 in acpi_bus_scan (handle=handle@entry=0xffffffffffffffff) at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/scan.c:2583
+//#22 0xffffffff832962e4 in acpi_scan_init () at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/scan.c:2718
+//#23 0xffffffff83295d3c in acpi_init () at /home/hawk/Desktop/mqemu/kernel/drivers/acpi/bus.c:1443
+//#24 0xffffffff81001a63 in do_one_initcall (fn=0xffffffff83295b40 <acpi_init>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1238
+//#25 0xffffffff832481d7 in do_initcall_level (command_line=0xffff888100127c00 "rdinit", level=4) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1300
+//#26 do_initcalls () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1316
+//#27 do_basic_setup () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1335
+//#28 kernel_init_freeable () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1548
+//#29 0xffffffff81ee5285 in kernel_init (unused=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1437
+//#30 0xffffffff8103be2f in ret_from_fork (prev=<optimized out>, regs=0xffffc90000013f58, fn=0xffffffff81ee5270 <kernel_init>, fn_arg=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/process.c:147
+//#31 0xffffffff8100244a in ret_from_fork_asm () at /home/hawk/Desktop/mqemu/kernel/arch/x86/entry/entry_64.S:243
+//#32 0x0000000000000000 in ?? ()
+
+/**
+ * __pci_read_base - Read a PCI BAR
+ * @dev: the PCI device
+ * @type: type of the BAR
+ * @res: resource buffer to be filled in
+ * @pos: BAR position in the config space
+ *
+ * Returns 1 if the BAR is 64-bit, or 0 if 32-bit.
+ */
+int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
+		    struct resource *res, unsigned int pos)
+{
+	u32 l = 0, sz = 0, mask;
+	u64 l64, sz64, mask64;
+	u16 orig_cmd;
+	struct pci_bus_region region, inverted_region;
+	const char *res_name = pci_resource_name(dev, res - dev->resource);
+
+	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
+    ...
+	pci_read_config_dword(dev, pos, &l);
+	pci_write_config_dword(dev, pos, l | mask);
+	pci_read_config_dword(dev, pos, &sz);
+	pci_write_config_dword(dev, pos, l);
+    ...
+	if (type == pci_bar_unknown) {
+		res->flags = decode_bar(dev, l);
+		res->flags |= IORESOURCE_SIZEALIGN;
+		if (res->flags & IORESOURCE_IO) {
+			l64 = l & PCI_BASE_ADDRESS_IO_MASK;
+			sz64 = sz & PCI_BASE_ADDRESS_IO_MASK;
+			mask64 = PCI_BASE_ADDRESS_IO_MASK & (u32)IO_SPACE_LIMIT;
+		} else {
+			l64 = l & PCI_BASE_ADDRESS_MEM_MASK;
+			sz64 = sz & PCI_BASE_ADDRESS_MEM_MASK;
+			mask64 = (u32)PCI_BASE_ADDRESS_MEM_MASK;
+		}
+	} else {
+		if (l & PCI_ROM_ADDRESS_ENABLE)
+			res->flags |= IORESOURCE_ROM_ENABLE;
+		l64 = l & PCI_ROM_ADDRESS_MASK;
+		sz64 = sz & PCI_ROM_ADDRESS_MASK;
+		mask64 = PCI_ROM_ADDRESS_MASK;
+	}
+    ...
+	sz64 = pci_size(l64, sz64, mask64);
+	if (!sz64) {
+		pci_info(dev, FW_BUG "%s: invalid; can't size\n", res_name);
+		goto fail;
+	}
+
+	region.start = l64;
+	region.end = l64 + sz64 - 1;
+
+	pcibios_bus_to_resource(dev->bus, res, &region);
+	pcibios_resource_to_bus(dev->bus, &inverted_region, res);
+
+	/*
+	 * If "A" is a BAR value (a bus address), "bus_to_resource(A)" is
+	 * the corresponding resource address (the physical address used by
+	 * the CPU.  Converting that resource address back to a bus address
+	 * should yield the original BAR value:
+	 *
+	 *     resource_to_bus(bus_to_resource(A)) == A
+	 *
+	 * If it doesn't, CPU accesses to "bus_to_resource(A)" will not
+	 * be claimed by the device.
+	 */
+	if (inverted_region.start != region.start) {
+		res->flags |= IORESOURCE_UNSET;
+		res->start = 0;
+		res->end = region.end - region.start;
+		pci_info(dev, "%s: initial BAR value %#010llx invalid\n",
+			 res_name, (unsigned long long)region.start);
+	}
+    ...
+}
+```
+可以看到，**guest**首先保存当前**BAR**的值，然后将**BAR**所有bit设为1。此时在读取**BAR**的值并将结果保存在`sz`字段中，最后恢复**BAR**的值。根据[**PCI Local Bus Specification Revision 3.0**](https://members.pcisig.com/wg/PCI-SIG/document/download/8237)的**6.2.5.1. Address Maps**章节可知，此时通过`sz`字段即可获取**BAR**空间的大小，如下所示
+```bash
+pwndbg> frame 
+#0  __pci_read_base (dev=dev@entry=0xffff8881008e1000, type=type@entry=pci_bar_unknown, res=res@entry=0xffff8881008e13a0, pos=pos@entry=16) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/probe.c:201
+201		pci_write_config_dword(dev, pos, l);
+pwndbg> p/x (~sz) + 1
+$10 = 0x20000
+```
+
+而根据前面[PCI桥](#对象初始化)的内容，Qemu使用[**pci_host_data_write()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci_host.c#L182)/[**pci_host_data_read()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci_host.c#L191)来模拟PCI配置空间的访问，如下所示
+```c
+//#0  pci_default_write_config (d=0x5555580d01f0, addr=16, val_in=4294967295, l=4) at ../../qemu/hw/pci/pci.c:1594
+//#1  0x0000555555a0f779 in e1000_write_config (pci_dev=0x5555580d01f0, address=16, val=4294967295, len=4) at ../../qemu/hw/net/e1000.c:1629
+//#2  0x0000555555a9e85a in pci_host_config_write_common (pci_dev=0x5555580d01f0, addr=16, limit=256, val=4294967295, len=4) at ../../qemu/hw/pci/pci_host.c:96
+//#3  0x0000555555a9eaa6 in pci_data_write (s=0x5555574157d0, addr=2147489808, val=4294967295, len=4) at ../../qemu/hw/pci/pci_host.c:138
+//#4  0x0000555555a9ec7b in pci_host_data_write (opaque=0x5555573de800, addr=0, val=4294967295, len=4) at ../../qemu/hw/pci/pci_host.c:188
+//#5  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555573dec40, addr=0, value=0x7ffff67ff598, size=4, shift=0, mask=4294967295, attrs=...) at ../../qemu/system/memory.c:497
+//#6  0x0000555555e19d39 in access_with_adjusted_size (addr=0, value=0x7ffff67ff598, size=4, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555573dec40, attrs=...) at ../../qemu/system/memory.c:573
+//#7  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555573dec40, addr=0, data=4294967295, op=MO_32, attrs=...) at ../../qemu/system/memory.c:1521
+//#8  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f8a000 "\377\377\377\377", len=4, mr_addr=0, l=0x7ffff67ff680, mr=0x5555573dec40) at ../../qemu/system/physmem.c:2713
+//#9  0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee8041af0, addr=3324, attrs=..., ptr=0x7ffff7f8a000, len=4, mr_addr=0, l=4, mr=0x5555573dec40) at ../../qemu/system/physmem.c:2743
+//#10 0x0000555555e2b982 in flatview_write (fv=0x7ffee8041af0, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2774
+//#11 0x0000555555e2bdd0 in address_space_write (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2894
+//#12 0x0000555555e2be4c in address_space_rw (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4, is_write=true) at ../../qemu/system/physmem.c:2904
+//#13 0x0000555555e85476 in kvm_handle_io (port=3324, attrs=..., data=0x7ffff7f8a000, direction=1, size=4, count=1) at ../../qemu/accel/kvm/kvm-all.c:2631
+//#14 0x0000555555e85de6 in kvm_cpu_exec (cpu=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-all.c:2903
+//#15 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#16 0x00005555560b2687 in qemu_thread_start (args=0x5555573aa7a0) at ../../qemu/util/qemu-thread-posix.c:541
+//#17 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#18 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+uint32_t pci_default_read_config(PCIDevice *d,
+                                 uint32_t address, int len)
+{
+    uint32_t val = 0;
+
+    assert(address + len <= pci_config_size(d));
+
+    if (pci_is_express_downstream_port(d) &&
+        ranges_overlap(address, len, d->exp.exp_cap + PCI_EXP_LNKSTA, 2)) {
+        pcie_sync_bridge_lnk(d);
+    }
+    memcpy(&val, d->config + address, len);
+    return le32_to_cpu(val);
+}
+
+void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val_in, int l)
+{
+    int i, was_irq_disabled = pci_irq_disabled(d);
+    uint32_t val = val_in;
+
+    assert(addr + l <= pci_config_size(d));
+
+    for (i = 0; i < l; val >>= 8, ++i) {
+        uint8_t wmask = d->wmask[addr + i];
+        uint8_t w1cmask = d->w1cmask[addr + i];
+        assert(!(wmask & w1cmask));
+        d->config[addr + i] = (d->config[addr + i] & ~wmask) | (val & wmask);
+        d->config[addr + i] &= ~(val & w1cmask); /* W1C: Write 1 to Clear */
+    }
+    if (ranges_overlap(addr, l, PCI_BASE_ADDRESS_0, 24) ||
+        ranges_overlap(addr, l, PCI_ROM_ADDRESS, 4) ||
+        ranges_overlap(addr, l, PCI_ROM_ADDRESS1, 4) ||
+        range_covers_byte(addr, l, PCI_COMMAND))
+        pci_update_mappings(d);
+
+    if (ranges_overlap(addr, l, PCI_COMMAND, 2)) {
+        pci_update_irq_disabled(d, was_irq_disabled);
+        memory_region_set_enabled(&d->bus_master_enable_region,
+                                  (pci_get_word(d->config + PCI_COMMAND)
+                                   & PCI_COMMAND_MASTER) && d->has_power);
+    }
+
+    msi_write_config(d, addr, val_in, l);
+    msix_write_config(d, addr, val_in, l);
+    pcie_sriov_config_write(d, addr, val_in, l);
+}
+```
+可以看到，Qemu则模拟**BAR**读取时并没有特别的操作，就是将**BAR**数据直接复制出来。因此将**BAR**所有bit置1后读取**BAR**空间大小的交互只能是在写入时实现。这里是通过**wmask**字段实现的，在**PCI设备**实例化时，[**pci_register_bar()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L1301)同时会设置**wmask**字段为`~(size-1)`，其确保`d->config[addr + i]`的低位始终为0来实现交互的模拟，如下所示
+```c
+void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val_in, int l)
+{
+    int i, was_irq_disabled = pci_irq_disabled(d);
+    uint32_t val = val_in;
+
+    assert(addr + l <= pci_config_size(d));
+
+    for (i = 0; i < l; val >>= 8, ++i) {
+        uint8_t wmask = d->wmask[addr + i];
+        uint8_t w1cmask = d->w1cmask[addr + i];
+        assert(!(wmask & w1cmask));
+        d->config[addr + i] = (d->config[addr + i] & ~wmask) | (val & wmask);
+        d->config[addr + i] &= ~(val & w1cmask); /* W1C: Write 1 to Clear */
+    }
+    ...
+}
+
+void pci_register_bar(PCIDevice *pci_dev, int region_num,
+                      uint8_t type, MemoryRegion *memory)
+{
+    ...
+    pcibus_t size = memory_region_size(memory);
+    ...
+    wmask = ~(size - 1);
+    if (region_num == PCI_ROM_SLOT) {
+        /* ROM enable bit is writable */
+        wmask |= PCI_ROM_ADDRESS_ENABLE;
+    }
+
+    addr = pci_bar(pci_dev, region_num);
+    pci_set_long(pci_dev->config + addr, type);
+
+    if (!(r->type & PCI_BASE_ADDRESS_SPACE_IO) &&
+        r->type & PCI_BASE_ADDRESS_MEM_TYPE_64) {
+        pci_set_quad(pci_dev->wmask + addr, wmask);
+        pci_set_quad(pci_dev->cmask + addr, ~0ULL);
+    } else {
+        pci_set_long(pci_dev->wmask + addr, wmask & 0xffffffff);
+        pci_set_long(pci_dev->cmask + addr, 0xffffffff);
+    }
+    ...
+}
+```
+
+最后，**guest**只需要向**BAR**中写入为**BAR**分配的地址空间(是在bios中进行设置而非kernel)，即可完成最终的**BAR**设置，**guest**会使用[**pci_update_mappings()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L1514)将**BAR**对应的**MemoryRegion**映射入对应的**AddressSpace**中，如下所示
+```c
+//#0  pci_default_write_config (d=0x5555581030f0, addr=16, val_in=4273733632, l=4) at ../../qemu/hw/pci/pci.c:1594
+//#1  0x0000555555a0f779 in e1000_write_config (pci_dev=0x5555581030f0, address=16, val=4273733632, len=4) at ../../qemu/hw/net/e1000.c:1629
+//#2  0x0000555555a9e85a in pci_host_config_write_common (pci_dev=0x5555581030f0, addr=16, limit=256, val=4273733632, len=4) at ../../qemu/hw/pci/pci_host.c:96
+//#3  0x0000555555a9eaa6 in pci_data_write (s=0x5555574288b0, addr=2147489808, val=4273733632, len=4) at ../../qemu/hw/pci/pci_host.c:138
+//#4  0x0000555555a9ec7b in pci_host_data_write (opaque=0x5555573f2390, addr=0, val=4273733632, len=4) at ../../qemu/hw/pci/pci_host.c:188
+//#5  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555573f27d0, addr=0, value=0x7ffff67ff598, size=4, shift=0, mask=4294967295, attrs=...) at ../../qemu/system/memory.c:497
+//#6  0x0000555555e19d39 in access_with_adjusted_size (addr=0, value=0x7ffff67ff598, size=4, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555573f27d0, attrs=...) at ../../qemu/system/memory.c:573
+//#7  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555573f27d0, addr=0, data=4273733632, op=MO_32, attrs=...) at ../../qemu/system/memory.c:1521
+//#8  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f8a000 "", len=4, mr_addr=0, l=0x7ffff67ff680, mr=0x5555573f27d0) at ../../qemu/system/physmem.c:2713
+//#9  0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee8041af0, addr=3324, attrs=..., ptr=0x7ffff7f8a000, len=4, mr_addr=0, l=4, mr=0x5555573f27d0) at ../../qemu/system/physmem.c:2743
+//#10 0x0000555555e2b982 in flatview_write (fv=0x7ffee8041af0, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2774
+//#11 0x0000555555e2bdd0 in address_space_write (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2894
+//#12 0x0000555555e2be4c in address_space_rw (as=0x55555704dc80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4, is_write=true) at ../../qemu/system/physmem.c:2904
+//#13 0x0000555555e85476 in kvm_handle_io (port=3324, attrs=..., data=0x7ffff7f8a000, direction=1, size=4, count=1) at ../../qemu/accel/kvm/kvm-all.c:2631
+//#14 0x0000555555e85de6 in kvm_cpu_exec (cpu=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-all.c:2903
+//#15 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573a0db0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#16 0x00005555560b2687 in qemu_thread_start (args=0x5555573aa8c0) at ../../qemu/util/qemu-thread-posix.c:541
+//#17 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#18 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val_in, int l)
+{
+    int i, was_irq_disabled = pci_irq_disabled(d);
+    uint32_t val = val_in;
+
+    assert(addr + l <= pci_config_size(d));
+    ...
+    if (ranges_overlap(addr, l, PCI_BASE_ADDRESS_0, 24) ||
+        ranges_overlap(addr, l, PCI_ROM_ADDRESS, 4) ||
+        ranges_overlap(addr, l, PCI_ROM_ADDRESS1, 4) ||
+        range_covers_byte(addr, l, PCI_COMMAND))
+        pci_update_mappings(d);
+
+    if (ranges_overlap(addr, l, PCI_COMMAND, 2)) {
+        pci_update_irq_disabled(d, was_irq_disabled);
+        memory_region_set_enabled(&d->bus_master_enable_region,
+                                  (pci_get_word(d->config + PCI_COMMAND)
+                                   & PCI_COMMAND_MASTER) && d->has_power);
+    }
+
+    msi_write_config(d, addr, val_in, l);
+    msix_write_config(d, addr, val_in, l);
+    pcie_sriov_config_write(d, addr, val_in, l);
+}
+
+static void pci_update_mappings(PCIDevice *d)
+{
+    PCIIORegion *r;
+    int i;
+    pcibus_t new_addr;
+
+    for(i = 0; i < PCI_NUM_REGIONS; i++) {
+        r = &d->io_regions[i];
+
+        /* this region isn't registered */
+        if (!r->size)
+            continue;
+
+        new_addr = pci_bar_address(d, i, r->type, r->size);
+        if (!d->has_power) {
+            new_addr = PCI_BAR_UNMAPPED;
+        }
+
+        /* This bar isn't changed */
+        if (new_addr == r->addr)
+            continue;
+
+        /* now do the real mapping */
+        if (r->addr != PCI_BAR_UNMAPPED) {
+            trace_pci_update_mappings_del(d->name, pci_dev_bus_num(d),
+                                          PCI_SLOT(d->devfn),
+                                          PCI_FUNC(d->devfn),
+                                          i, r->addr, r->size);
+            memory_region_del_subregion(r->address_space, r->memory);
+        }
+        r->addr = new_addr;
+        if (r->addr != PCI_BAR_UNMAPPED) {
+            trace_pci_update_mappings_add(d->name, pci_dev_bus_num(d),
+                                          PCI_SLOT(d->devfn),
+                                          PCI_FUNC(d->devfn),
+                                          i, r->addr, r->size);
+            memory_region_add_subregion_overlap(r->address_space,
+                                                r->addr, r->memory, 1);
+        }
+    }
+
+    pci_update_vga(d);
+}
+```
 
 # 参考
 1. [用QEMU来体会PCI/PCIE设备 ](https://www.owalle.com/2021/12/09/qemu-pci/)
@@ -1616,3 +1951,4 @@ static int pci_conf1_write(unsigned int seg, unsigned int bus,
 6. [QEMU总线模拟 ](https://66ring.github.io/2021/09/10/universe/qemu/qemu_bus_simulate/)
 7. [PCI设备的创建与初始化](https://github.com/GiantVM/doc/blob/master/pci.md)
 8. [QEMU - e1000全虚拟化前端与TAP/TUN后端流程简析](https://blog.csdn.net/vertor11/article/details/135942748)
+9. [【精讲】PCIe基础篇——BAR配置过程](https://blog.csdn.net/u013253075/article/details/119485466)
