@@ -157,7 +157,7 @@ static void i440fx_pcihost_class_init(ObjectClass *klass, void *data)
                               NULL, NULL, NULL);
 }
 ```
-其主要设置了****的**realize**函数指针为[**i440fx_pcihost_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci-host/i440fx.c#L249)
+其主要设置了**realize**函数指针为[**i440fx_pcihost_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci-host/i440fx.c#L249)
 
 #### 对象初始化
 
