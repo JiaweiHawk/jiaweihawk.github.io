@@ -183,9 +183,795 @@ struct virtq_used_elem {
 
 这种机制支持前向和后向兼容性：即如果设备通过新增**feature bit**进行了增强，较旧的驱动程序不会将该新增的**feature bit**告知给设备；类似的，如果驱动新增了设备不支持的**feature bit**，则其无法从设备中读取到新增的**feature bit**
 
-# ~~virtio驱动~~
+# virtio transport
 
-# ~~virtio设备~~
+根据[virtio标准4.](https://docs.oasis-open.org/virtio/virtio/v1.2/cs01/virtio-v1.2-cs01.html#x1-1140004)可知，**virtio协议**可以使用各种不同的总线，因此**virtio协议**被分为通用部分和总线相关部分。即**virtio协议**规定都需要有[前面小节](#virtio协议)介绍的5个组件，但驱动和**virtio**设备如何设置这些组件就是总线相关的。其主要可分为**Virtio Over PCI Bus**、**Virtio Over MMIO**和**Virtio Over Channel I/O**，而**virtio-net-pci设备**自然属于是**Virtio Over PCI BUS**。
+
+根据[virtio标准4.1.3.](https://docs.oasis-open.org/virtio/virtio/v1.2/cs01/virtio-v1.2-cs01.html#x1-1210003)可知，**Virtio Over PCI BUS**通过**PCI Capabilities**来设置**virtio协议**。根据{% post_link qemu的PCI设备 %}可知，标准的**PCI配置空间**如下图所示
+![PCI配置空间](PCI配置空间.png)
+
+其中**virtio协议**使用这些**PCI Capabilities**作为**virtio**结构的配置空间，如下所示
+![virtio的PCI配置空间](virtio的PCI配置空间.png)
+
+## capability
+
+具体的，每个配置空间的位置由下述格式的**PCI Capabilities**指定
+```c
+struct virtio_pci_cap { 
+        u8 cap_vndr;    /* Generic PCI field: PCI_CAP_ID_VNDR */ 
+        u8 cap_next;    /* Generic PCI field: next ptr. */ 
+        u8 cap_len;     /* Generic PCI field: capability length */ 
+        u8 cfg_type;    /* Identifies the structure. */ 
+        u8 bar;         /* Where to find it. */ 
+        u8 id;          /* Multiple capabilities of the same type */ 
+        u8 padding[2];  /* Pad to full dword. */ 
+        le32 offset;    /* Offset within bar. */ 
+        le32 length;    /* Length of the structure, in bytes. */ 
+};
+```
+- **cap_vndr**字段值为0x9，用于标识vendor；**cap_next**字段指向下一个**PCI Capability**在**PCI设置空间**的偏移
+- **cap_len**字段表示当前**capability**的长度，包括紧跟在**struct virtio_pci_cap**后的数据
+- **cfg_type**字段表示**capability**配置空间的类型，包括**VIRTIO_PCI_CAP_COMMON_CFG**、**VIRTIO_PCI_CAP_NOTIFY_CFG**、**VIRTIO_PCI_CAP_ISR_CFG**、**VIRTIO_PCI_CAP_DEVICE_CFG**、**VIRTIO_PCI_CAP_PCI_CFG**、**VIRTIO_PCI_CAP_SHARED_MEMORY_CFG**和**VIRTIO_PCI_CAP_VENDOR_CFG**
+- **bar**字段指向**PCI配置空间**的**BAR**寄存器，将组件配置空间映射到**BAR**寄存器指向的内存空间或I/O空间
+- **id**字段用于唯一标识**capability**
+- **offset**字段表示组件配置空间在**BAR**空间的起始偏移
+- **length**字段表示组件配置空间在**BAR**空间的长度
+
+其中，此结构根据**cfg_type**字段还会再数据结构后跟随额外的数据，例如**VIRTIO_PCI_CAP_NOTIFY_CFG**
+```c
+struct virtio_pci_notify_cap { 
+        struct virtio_pci_cap cap; 
+        le32 notify_off_multiplier; /* Multiplier for queue_notify_off. */ 
+}; 
+```
+
+## 配置空间
+
+根据前面的描述，**capability**配置空间包含**VIRTIO_PCI_CAP_COMMON_CFG**、**VIRTIO_PCI_CAP_NOTIFY_CFG**、**VIRTIO_PCI_CAP_ISR_CFG**、**VIRTIO_PCI_CAP_DEVICE_CFG**、**VIRTIO_PCI_CAP_PCI_CFG**、**VIRTIO_PCI_CAP_SHARED_MEMORY_CFG**和**VIRTIO_PCI_CAP_VENDOR_CFG**等。
+
+这里以最重要的**VIRTIO_PCI_CAP_COMMON_CFG**配置空间为例，根据[virtio标准4.1.4.3.](https://docs.oasis-open.org/virtio/virtio/v1.2/cs01/virtio-v1.2-cs01.html#x1-1270003)，其配置空间结构如下所示
+```c
+struct virtio_pci_common_cfg { 
+        /* About the whole device. */ 
+        le32 device_feature_select;     /* read-write */ 
+        le32 device_feature;            /* read-only for driver */ 
+        le32 driver_feature_select;     /* read-write */ 
+        le32 driver_feature;            /* read-write */ 
+        le16 config_msix_vector;        /* read-write */ 
+        le16 num_queues;                /* read-only for driver */ 
+        u8 device_status;               /* read-write */ 
+        u8 config_generation;           /* read-only for driver */ 
+ 
+        /* About a specific virtqueue. */ 
+        le16 queue_select;              /* read-write */ 
+        le16 queue_size;                /* read-write */ 
+        le16 queue_msix_vector;         /* read-write */ 
+        le16 queue_enable;              /* read-write */ 
+        le16 queue_notify_off;          /* read-only for driver */ 
+        le64 queue_desc;                /* read-write */ 
+        le64 queue_driver;              /* read-write */ 
+        le64 queue_device;              /* read-write */ 
+        le16 queue_notify_data;         /* read-only for driver */ 
+        le16 queue_reset;               /* read-write */ 
+}; 
+```
+可以看到，其包含了前面[virtqueue](#virtqueue)、[device status field](#device-status-field)和[feature bits](#feature-bits)等相关信息。具体的，其每个字段含义如下所示
+- **device_feature_select**字段被驱动用来选择读取设备哪些[**feature bits**](#feature-bits)。例如值0表示读取低32位的[**feature bits**](#feature-bits)，值1表示读取高32位的[**feature bits**](#feature-bits)
+- **device_feature**字段则是驱动通过**device_feature_select**选择的设备的对应[**feature bits**](#feature-bits)
+- **driver_feature_select**字段类似**device_feature_select**字段，被驱动用来选择想写入设备的[**feature bits**](#feature-bits)范围。值0表示写入低32位的[**feature bits**](#feature-bits)，值1表示写入高32位的[**feature bits**](#feature-bits)
+- **driver_feature**字段则是驱动通过**driver_feature_select**选择的写入设备的对应[**feature bits**](#feature-bits)
+- **config_msix_vector**字段用来设置MSI-X的**Configuration Vector**
+- **num_queues**字段表示设备支持的[**virtqueues**](#virtqueue)最大数量
+- **device_status**字段用来设置[**device status**](#device-status-field)
+- **config_generation**字段会被设备每次更改设置后变化
+- **queue_select**字段用来表示后续**queue_**字段所设置的[**virtqueue**](#virtqueue)序号
+- **queue_size**字段用来表示**queue_select**指定的[**virtqueue**](#virtqueue)的大小
+- **queue_msix_vector**字段用来指定**queue_select**指定的[**virtqueue**](#virtqueue)的MSI-X向量
+- **queue_enable**字段用来指定**queue_select**指定的[**virtqueue**](#virtqueue)是否被启用
+- **queue_notify_off**字段用来计算**queue_select**指定的[**virtqueue**](#virtqueue)的**notification**在**VIRTIO_PCI_CAP_NOTIFY_CFG**配置空间的偏移
+- **queue_desc**字段用来指定**queue_select**指定的[**virtqueue**](#virtqueue)的**descriptor table**的物理地址
+- **queue_driver**字段用来指定**queue_select**指定的[**virtqueue**](#virtqueue)的**available ring**的物理地址
+- **queue_device**字段用来指定**queue_select**指定的[**virtqueue**](#virtqueue)的**used ring**的物理地址
+- **queue_reset**字段用来指定**queue_select**指定的[**virtqueue**](#virtqueue)是否需要被重置
+
+可以看到，基本包含了之前接介绍的[virtio协议组件](#virtio协议)的设置内容
+
+# virtio设备
+
+这里我们以**virtio-net-pci**为例，分析一下Qemu中的**virtio**协议
+
+**virtio-pci**类型的设备并没有静态的**TypeInfo**变量，其是通过[**virtio_pci_types_register()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2569)动态生成并注册对应的**TypeInfo**。**virtio-net-pci**就是让**virtio_pci_types_register()**基于[**virtio_net_pci_info**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L93)生成对应的**TypeInfo**变量并注册，如下所示
+```c
+static const VirtioPCIDeviceTypeInfo virtio_net_pci_info = {
+    .base_name             = TYPE_VIRTIO_NET_PCI,
+    .generic_name          = "virtio-net-pci",
+    .transitional_name     = "virtio-net-pci-transitional",
+    .non_transitional_name = "virtio-net-pci-non-transitional",
+    .instance_size = sizeof(VirtIONetPCI),
+    .instance_init = virtio_net_pci_instance_init,
+    .class_init    = virtio_net_pci_class_init,
+};
+
+static void virtio_net_pci_register(void)
+{
+    virtio_pci_types_register(&virtio_net_pci_info);
+}
+
+void virtio_pci_types_register(const VirtioPCIDeviceTypeInfo *t)
+{
+    char *base_name = NULL;
+    TypeInfo base_type_info = {
+        .name          = t->base_name,
+        .parent        = t->parent ? t->parent : TYPE_VIRTIO_PCI,
+        .instance_size = t->instance_size,
+        .instance_init = t->instance_init,
+        .instance_finalize = t->instance_finalize,
+        .class_size    = t->class_size,
+        .abstract      = true,
+        .interfaces    = t->interfaces,
+    };
+    TypeInfo generic_type_info = {
+        .name = t->generic_name,
+        .parent = base_type_info.name,
+        .class_init = virtio_pci_generic_class_init,
+        .interfaces = (InterfaceInfo[]) {
+            { INTERFACE_PCIE_DEVICE },
+            { INTERFACE_CONVENTIONAL_PCI_DEVICE },
+            { }
+        },
+    };
+
+    if (!base_type_info.name) {
+        /* No base type -> register a single generic device type */
+        /* use intermediate %s-base-type to add generic device props */
+        base_name = g_strdup_printf("%s-base-type", t->generic_name);
+        base_type_info.name = base_name;
+        base_type_info.class_init = virtio_pci_generic_class_init;
+
+        generic_type_info.parent = base_name;
+        generic_type_info.class_init = virtio_pci_base_class_init;
+        generic_type_info.class_data = (void *)t;
+
+        assert(!t->non_transitional_name);
+        assert(!t->transitional_name);
+    } else {
+        base_type_info.class_init = virtio_pci_base_class_init;
+        base_type_info.class_data = (void *)t;
+    }
+
+    type_register(&base_type_info);
+    if (generic_type_info.name) {
+        type_register(&generic_type_info);
+    }
+    ...
+}
+```
+
+实际最后会生成如下的**TypeInfo**
+```bash
+pwndbg> frame 
+#0  virtio_pci_types_register (t=0x555556ed8840 <virtio_net_pci_info>) at ../../qemu/hw/virtio/virtio-pci.c:2616
+2616	    if (t->non_transitional_name) {
+
+pwndbg> p generic_type_info 
+$1 = {
+  name = 0x5555562ddbf5 "virtio-net-pci",
+  parent = 0x5555562ddbb6 "virtio-net-pci-base",
+  instance_size = 0,
+  instance_align = 0,
+  instance_init = 0x0,
+  instance_post_init = 0x0,
+  instance_finalize = 0x0,
+  abstract = false,
+  class_size = 0,
+  class_init = 0x555555b74f0b <virtio_pci_generic_class_init>,
+  class_base_init = 0x0,
+  class_data = 0x0,
+  interfaces = 0x7fffffffd700
+}
+```
+
+## 初始化
+
+要想分析**virtio设备**的初始化过程，需要罗列相关的**TypeInfo**变量，如下所示
+```bash
+pwndbg> p generic_type_info 
+$4 = {
+  name = 0x5555562ddbf5 "virtio-net-pci",
+  parent = 0x5555562ddbb6 "virtio-net-pci-base",
+  instance_size = 0,
+  instance_align = 0,
+  instance_init = 0x0,
+  instance_post_init = 0x0,
+  instance_finalize = 0x0,
+  abstract = false,
+  class_size = 0,
+  class_init = 0x555555b74f0b <virtio_pci_generic_class_init>,
+  class_base_init = 0x0,
+  class_data = 0x0,
+  interfaces = 0x7fffffffd700
+}
+
+pwndbg> p base_type_info 
+$5 = {
+  name = 0x5555562ddbb6 "virtio-net-pci-base",
+  parent = 0x55555626674d "virtio-pci",
+  instance_size = 43376,
+  instance_align = 0,
+  instance_init = 0x555555e0fa2b <virtio_net_pci_instance_init>,
+  instance_post_init = 0x0,
+  instance_finalize = 0x0,
+  abstract = true,
+  class_size = 0,
+  class_init = 0x555555b74ec1 <virtio_pci_base_class_init>,
+  class_base_init = 0x0,
+  class_data = 0x555556ed8840 <virtio_net_pci_info>,
+  interfaces = 0x0
+}
+
+pwndbg> p virtio_pci_info 
+$6 = {
+  name = 0x55555626674d "virtio-pci",
+  parent = 0x5555562666ba "pci-device",
+  instance_size = 34032,
+  instance_align = 0,
+  instance_init = 0x0,
+  instance_post_init = 0x0,
+  instance_finalize = 0x0,
+  abstract = true,
+  class_size = 248,
+  class_init = 0x555555b74dd1 <virtio_pci_class_init>,
+  class_base_init = 0x0,
+  class_data = 0x0,
+  interfaces = 0x0
+}
+
+pwndbg> p pci_device_type_info
+$7 = {
+  name = 0x55555623a47a "pci-device",
+  parent = 0x55555623a35d "device",
+  instance_size = 2608,
+  instance_align = 0,
+  instance_init = 0x0,
+  instance_post_init = 0x0,
+  instance_finalize = 0x0,
+  abstract = true,
+  class_size = 232,
+  class_init = 0x555555a9c002 <pci_device_class_init>,
+  class_base_init = 0x555555a9c07d <pci_device_class_base_init>,
+  class_data = 0x0,
+  interfaces = 0x0
+}
+
+pwndbg> p device_type_info 
+$8 = {
+  name = 0x5555562f9c0d "device",
+  parent = 0x5555562f9f27 "object",
+  instance_size = 160,
+  instance_align = 0,
+  instance_init = 0x555555e9ca7f <device_initfn>,
+  instance_post_init = 0x555555e9caf9 <device_post_init>,
+  instance_finalize = 0x555555e9cb30 <device_finalize>,
+  abstract = true,
+  class_size = 176,
+  class_init = 0x555555e9cf54 <device_class_init>,
+  class_base_init = 0x555555e9cd10 <device_class_base_init>,
+  class_data = 0x0,
+  interfaces = 0x5555570085a0 <__compound_literal.0>
+}
+```
+
+可以看到，**virtio_pci_info**的**class_size**字段非0，因此**virtio设备**使用[**struct VirtioPCIClass**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/virtio/virtio-pci.h#L108)表征其类信息；**base_type_info**的**instance_size**字段非0，根据前面[virtio设备](#virtio设备)小节的内容，因此**virtio设备**使用[**struct VirtIONetPCI**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L36)表征其对象信息。
+
+### 类初始化
+
+根据[前面小节](#初始化)的内容，**virtio设备**使用[**virtio_pci_generic_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2546)、[**virtio_pci_base_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2538)、[**virtio_pci_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2504)、[**pci_device_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L2628)和[**device_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L801)分别初始化对应的类数据结构，如下所示
+```c
+static void virtio_pci_generic_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+
+    device_class_set_props(dc, virtio_pci_generic_properties);
+}
+
+
+static void virtio_pci_base_class_init(ObjectClass *klass, void *data)
+{
+    const VirtioPCIDeviceTypeInfo *t = data;
+    if (t->class_init) {
+        t->class_init(klass, NULL);
+    }
+}
+
+static void virtio_pci_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
+    VirtioPCIClass *vpciklass = VIRTIO_PCI_CLASS(klass);
+    ResettableClass *rc = RESETTABLE_CLASS(klass);
+
+    device_class_set_props(dc, virtio_pci_properties);
+    k->realize = virtio_pci_realize;
+    k->exit = virtio_pci_exit;
+    k->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    k->revision = VIRTIO_PCI_ABI_VERSION;
+    k->class_id = PCI_CLASS_OTHERS;
+    device_class_set_parent_realize(dc, virtio_pci_dc_realize,
+                                    &vpciklass->parent_dc_realize);
+    rc->phases.hold = virtio_pci_bus_reset_hold;
+}
+
+static void pci_device_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *k = DEVICE_CLASS(klass);
+
+    k->realize = pci_qdev_realize;
+    k->unrealize = pci_qdev_unrealize;
+    k->bus_type = TYPE_PCI_BUS;
+    device_class_set_props(k, pci_props);
+}
+
+static void device_class_init(ObjectClass *class, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(class);
+    VMStateIfClass *vc = VMSTATE_IF_CLASS(class);
+    ResettableClass *rc = RESETTABLE_CLASS(class);
+
+    class->unparent = device_unparent;
+
+    /* by default all devices were considered as hotpluggable,
+     * so with intent to check it in generic qdev_unplug() /
+     * device_set_realized() functions make every device
+     * hotpluggable. Devices that shouldn't be hotpluggable,
+     * should override it in their class_init()
+     */
+    dc->hotpluggable = true;
+    dc->user_creatable = true;
+    vc->get_id = device_vmstate_if_get_id;
+    rc->get_state = device_get_reset_state;
+    rc->child_foreach = device_reset_child_foreach;
+
+    /*
+     * @device_phases_reset is put as the default reset method below, allowing
+     * to do the multi-phase transition from base classes to leaf classes. It
+     * allows a legacy-reset Device class to extend a multi-phases-reset
+     * Device class for the following reason:
+     * + If a base class B has been moved to multi-phase, then it does not
+     *   override this default reset method and may have defined phase methods.
+     * + A child class C (extending class B) which uses
+     *   device_class_set_parent_reset() (or similar means) to override the
+     *   reset method will still work as expected. @device_phases_reset function
+     *   will be registered as the parent reset method and effectively call
+     *   parent reset phases.
+     */
+    dc->reset = device_phases_reset;
+    rc->get_transitional_function = device_get_transitional_reset;
+
+    object_class_property_add_bool(class, "realized",
+                                   device_get_realized, device_set_realized);
+    object_class_property_add_bool(class, "hotpluggable",
+                                   device_get_hotpluggable, NULL);
+    object_class_property_add_bool(class, "hotplugged",
+                                   device_get_hotplugged, NULL);
+    object_class_property_add_link(class, "parent_bus", TYPE_BUS,
+                                   offsetof(DeviceState, parent_bus), NULL, 0);
+}
+```
+其中，根据[前面初始化](#初始化)的内容，**virtio_pci_base_class_init()**的参数是[**virtio_net_pci_info**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L93)，其**class_init**字段为[**virtio_net_pci_class_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L67)，如下所示
+```c
+static void virtio_net_pci_class_init(ObjectClass *klass, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
+    VirtioPCIClass *vpciklass = VIRTIO_PCI_CLASS(klass);
+
+    k->romfile = "efi-virtio.rom";
+    k->vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET;
+    k->device_id = PCI_DEVICE_ID_VIRTIO_NET;
+    k->revision = VIRTIO_PCI_ABI_VERSION;
+    k->class_id = PCI_CLASS_NETWORK_ETHERNET;
+    set_bit(DEVICE_CATEGORY_NETWORK, dc->categories);
+    device_class_set_props(dc, virtio_net_properties);
+    vpciklass->realize = virtio_net_pci_realize;
+}
+```
+可以看到，这些类的初始化基本就是覆盖父类的**realize**函数指针，从而在实例化时执行相关的逻辑
+
+### 对象初始化
+
+**virtio设备**使用[**virtio_net_pci_instance_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L83)和[**device_initfn()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L652)来初始化对应的对象数据结构，如下所示
+```c
+//#0  virtio_net_pci_instance_init (obj=0x5555580a50b0) at ../../qemu/hw/virtio/virtio-net-pci.c:85
+//#1  0x0000555555ea30e0 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0880) at ../../qemu/qom/object.c:429
+//#2  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0a40) at ../../qemu/qom/object.c:425
+//#3  0x0000555555ea36a6 in object_initialize_with_type (obj=0x5555580a50b0, size=43376, type=0x5555570e0a40) at ../../qemu/qom/object.c:571
+//#4  0x0000555555ea3e75 in object_new_with_type (type=0x5555570e0a40) at ../../qemu/qom/object.c:791
+//#5  0x0000555555ea3eb1 in object_new_with_class (klass=0x55555717e490) at ../../qemu/qom/object.c:799
+//#6  0x0000555555c3d234 in qemu_get_nic_models (device_type=0x55555623a47a "pci-device") at ../../qemu/net/net.c:968
+//#7  0x0000555555c3db78 in qemu_create_nic_bus_devices (bus=0x555557415420, parent_type=0x55555623a47a "pci-device", default_model=0x5555562ab765 "e1000", alias=0x55555623b21d "virtio", alias_target=0x55555623b20e "virtio-net-pci") at ../../qemu/net/net.c:1188
+//#8  0x0000555555a9a0da in pci_init_nic_devices (bus=0x555557415420, default_model=0x5555562ab765 "e1000") at ../../qemu/hw/pci/pci.c:1861
+//#9  0x0000555555cd3d69 in pc_nic_init (pcmc=0x5555572bb030, isa_bus=0x555557163a00, pci_bus=0x555557415420) at ../../qemu/hw/i386/pc.c:1283
+//#10 0x0000555555cb2ed4 in pc_init1 (machine=0x555557357800, pci_type=0x5555562ab7db "i440FX") at ../../qemu/hw/i386/pc_piix.c:323
+//#11 0x0000555555cb35e3 in pc_init_v9_0 (machine=0x555557357800) at ../../qemu/hw/i386/pc_piix.c:523
+//#12 0x000055555595f8be in machine_run_board_init (machine=0x555557357800, mem_path=0x0, errp=0x7fffffffd710) at ../../qemu/hw/core/machine.c:1547
+//#13 0x0000555555bdbc78 in qemu_init_board () at ../../qemu/system/vl.c:2613
+//#14 0x0000555555bdbf87 in qmp_x_exit_preconfig (errp=0x555557061f60 <error_fatal>) at ../../qemu/system/vl.c:2705
+//#15 0x0000555555bde944 in qemu_init (argc=35, argv=0x7fffffffda48) at ../../qemu/system/vl.c:3739
+//#16 0x0000555555e96f93 in main (argc=35, argv=0x7fffffffda48) at ../../qemu/system/main.c:47
+//#17 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=35, argv=argv@entry=0x7fffffffda48) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#18 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=35, argv=0x7fffffffda48, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffda38) at ../csu/libc-start.c:392
+//#19 0x000055555586cc95 in _start ()
+static void virtio_net_pci_instance_init(Object *obj)
+{
+    VirtIONetPCI *dev = VIRTIO_NET_PCI(obj);
+
+    virtio_instance_init_common(obj, &dev->vdev, sizeof(dev->vdev),
+                                TYPE_VIRTIO_NET);
+    object_property_add_alias(obj, "bootindex", OBJECT(&dev->vdev),
+                              "bootindex");
+}
+
+//#0  device_initfn (obj=0x5555580a50b0) at ../../qemu/hw/core/qdev.c:654
+//#1  0x0000555555ea30e0 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e4430) at ../../qemu/qom/object.c:429
+//#2  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x55555709f7c0) at ../../qemu/qom/object.c:425
+//#3  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570ada10) at ../../qemu/qom/object.c:425
+//#4  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0880) at ../../qemu/qom/object.c:425
+//#5  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0a40) at ../../qemu/qom/object.c:425
+//#6  0x0000555555ea36a6 in object_initialize_with_type (obj=0x5555580a50b0, size=43376, type=0x5555570e0a40) at ../../qemu/qom/object.c:571
+//#7  0x0000555555ea3e75 in object_new_with_type (type=0x5555570e0a40) at ../../qemu/qom/object.c:791
+//#8  0x0000555555ea3eb1 in object_new_with_class (klass=0x55555717e490) at ../../qemu/qom/object.c:799
+//#9  0x0000555555c3d234 in qemu_get_nic_models (device_type=0x55555623a47a "pci-device") at ../../qemu/net/net.c:968
+//#10 0x0000555555c3db78 in qemu_create_nic_bus_devices (bus=0x555557415420, parent_type=0x55555623a47a "pci-device", default_model=0x5555562ab765 "e1000", alias=0x55555623b21d "virtio", alias_target=0x55555623b20e "virtio-net-pci") at ../../qemu/net/net.c:1188
+//#11 0x0000555555a9a0da in pci_init_nic_devices (bus=0x555557415420, default_model=0x5555562ab765 "e1000") at ../../qemu/hw/pci/pci.c:1861
+//#12 0x0000555555cd3d69 in pc_nic_init (pcmc=0x5555572bb030, isa_bus=0x555557163a00, pci_bus=0x555557415420) at ../../qemu/hw/i386/pc.c:1283
+//#13 0x0000555555cb2ed4 in pc_init1 (machine=0x555557357800, pci_type=0x5555562ab7db "i440FX") at ../../qemu/hw/i386/pc_piix.c:323
+//#14 0x0000555555cb35e3 in pc_init_v9_0 (machine=0x555557357800) at ../../qemu/hw/i386/pc_piix.c:523
+//#15 0x000055555595f8be in machine_run_board_init (machine=0x555557357800, mem_path=0x0, errp=0x7fffffffd710) at ../../qemu/hw/core/machine.c:1547
+//#16 0x0000555555bdbc78 in qemu_init_board () at ../../qemu/system/vl.c:2613
+//#17 0x0000555555bdbf87 in qmp_x_exit_preconfig (errp=0x555557061f60 <error_fatal>) at ../../qemu/system/vl.c:2705
+//#18 0x0000555555bde944 in qemu_init (argc=35, argv=0x7fffffffda48) at ../../qemu/system/vl.c:3739
+//#19 0x0000555555e96f93 in main (argc=35, argv=0x7fffffffda48) at ../../qemu/system/main.c:47
+//#20 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=35, argv=argv@entry=0x7fffffffda48) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#21 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=35, argv=0x7fffffffda48, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffda38) at ../csu/libc-start.c:392
+//#22 0x000055555586cc95 in _start ()
+static void device_initfn(Object *obj)
+{
+    DeviceState *dev = DEVICE(obj);
+
+    if (phase_check(PHASE_MACHINE_READY)) {
+        dev->hotplugged = 1;
+        qdev_hot_added = true;
+    }
+
+    dev->instance_id_alias = -1;
+    dev->realized = false;
+    dev->allow_unplug_during_migration = false;
+
+    QLIST_INIT(&dev->gpios);
+    QLIST_INIT(&dev->clocks);
+}
+```
+这里仅仅是初始化了必要的字段。
+
+## 实例化
+
+根据前面[类初始化](#类初始化)的内容，**virtio**设备将其父类数据结构的**realize**函数指针依次设置为了[**pci_qdev_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/pci/pci.c#L2031)、[**virtio_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2272)和[**virtio_net_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L49)
+```c
+//#0  virtio_net_pci_realize (vpci_dev=0x5555580a4fa0, errp=0x7fffffffd2f0) at ../../qemu/hw/virtio/virtio-net-pci.c:51
+//#1  0x0000555555b749a9 in virtio_pci_realize (pci_dev=0x5555580a4fa0, errp=0x7fffffffd2f0) at ../../qemu/hw/virtio/virtio-pci.c:2407
+//#2  0x0000555555a9a921 in pci_qdev_realize (qdev=0x5555580a4fa0, errp=0x7fffffffd3b0) at ../../qemu/hw/pci/pci.c:2093
+//#3  0x0000555555b74dc4 in virtio_pci_dc_realize (qdev=0x5555580a4fa0, errp=0x7fffffffd3b0) at ../../qemu/hw/virtio/virtio-pci.c:2501
+//#4  0x0000555555e9c4f4 in device_set_realized (obj=0x5555580a4fa0, value=true, errp=0x7fffffffd620) at ../../qemu/hw/core/qdev.c:510
+//#5  0x0000555555ea7cfb in property_set_bool (obj=0x5555580a4fa0, v=0x5555580b51a0, name=0x5555562f9dd1 "realized", opaque=0x5555570f4510, errp=0x7fffffffd620) at ../../qemu/qom/object.c:2358
+//#6  0x0000555555ea5891 in object_property_set (obj=0x5555580a4fa0, name=0x5555562f9dd1 "realized", v=0x5555580b51a0, errp=0x7fffffffd620) at ../../qemu/qom/object.c:1472
+//#7  0x0000555555eaa4ca in object_property_set_qobject (obj=0x5555580a4fa0, name=0x5555562f9dd1 "realized", value=0x5555580b3d60, errp=0x7fffffffd620) at ../../qemu/qom/qom-qobject.c:28
+//#8  0x0000555555ea5c4a in object_property_set_bool (obj=0x5555580a4fa0, name=0x5555562f9dd1 "realized", value=true, errp=0x7fffffffd620) at ../../qemu/qom/object.c:1541
+//#9  0x0000555555e9bc0e in qdev_realize (dev=0x5555580a4fa0, bus=0x555557415420, errp=0x7fffffffd620) at ../../qemu/hw/core/qdev.c:292
+//#10 0x0000555555bcdee9 in qdev_device_add_from_qdict (opts=0x5555580a31b0, from_json=false, errp=0x7fffffffd620) at ../../qemu/system/qdev-monitor.c:718
+//#11 0x0000555555bcdf99 in qdev_device_add (opts=0x5555570ef1c0, errp=0x555557061f60 <error_fatal>) at ../../qemu/system/qdev-monitor.c:737
+//#12 0x0000555555bd80a7 in device_init_func (opaque=0x0, opts=0x5555570ef1c0, errp=0x555557061f60 <error_fatal>) at ../../qemu/system/vl.c:1200
+//#13 0x00005555560be1e2 in qemu_opts_foreach (list=0x555556f4bec0 <qemu_device_opts>, func=0x555555bd807c <device_init_func>, opaque=0x0, errp=0x555557061f60 <error_fatal>) at ../../qemu/util/qemu-option.c:1135
+//#14 0x0000555555bdbd46 in qemu_create_cli_devices () at ../../qemu/system/vl.c:2637
+//#15 0x0000555555bdbf8c in qmp_x_exit_preconfig (errp=0x555557061f60 <error_fatal>) at ../../qemu/system/vl.c:2706
+//#16 0x0000555555bde944 in qemu_init (argc=35, argv=0x7fffffffda68) at ../../qemu/system/vl.c:3739
+//#17 0x0000555555e96f93 in main (argc=35, argv=0x7fffffffda68) at ../../qemu/system/main.c:47
+//#18 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=35, argv=argv@entry=0x7fffffffda68) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#19 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=35, argv=0x7fffffffda68, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffda58) at ../csu/libc-start.c:392
+//#20 0x000055555586cc95 in _start ()
+static void virtio_net_pci_realize(VirtIOPCIProxy *vpci_dev, Error **errp)
+{
+    DeviceState *qdev = DEVICE(vpci_dev);
+    VirtIONetPCI *dev = VIRTIO_NET_PCI(vpci_dev);
+    DeviceState *vdev = DEVICE(&dev->vdev);
+    VirtIONet *net = VIRTIO_NET(vdev);
+
+    if (vpci_dev->nvectors == DEV_NVECTORS_UNSPECIFIED) {
+        vpci_dev->nvectors = 2 * MAX(net->nic_conf.peers.queues, 1)
+            + 1 /* Config interrupt */
+            + 1 /* Control vq */;
+    }
+
+    virtio_net_set_netclient_name(&dev->vdev, qdev->id,
+                                  object_get_typename(OBJECT(qdev)));
+    qdev_realize(vdev, BUS(&vpci_dev->bus), errp);
+}
+
+static void virtio_pci_realize(PCIDevice *pci_dev, Error **errp)
+{
+    VirtIOPCIProxy *proxy = VIRTIO_PCI(pci_dev);
+    VirtioPCIClass *k = VIRTIO_PCI_GET_CLASS(pci_dev);
+    bool pcie_port = pci_bus_is_express(pci_get_bus(pci_dev)) &&
+                     !pci_bus_is_root(pci_get_bus(pci_dev));
+
+    /* fd-based ioevents can't be synchronized in record/replay */
+    if (replay_mode != REPLAY_MODE_NONE) {
+        proxy->flags &= ~VIRTIO_PCI_FLAG_USE_IOEVENTFD;
+    }
+
+    /*
+     * virtio pci bar layout used by default.
+     * subclasses can re-arrange things if needed.
+     *
+     *   region 0   --  virtio legacy io bar
+     *   region 1   --  msi-x bar
+     *   region 2   --  virtio modern io bar (off by default)
+     *   region 4+5 --  virtio modern memory (64bit) bar
+     *
+     */
+    proxy->legacy_io_bar_idx  = 0;
+    proxy->msix_bar_idx       = 1;
+    proxy->modern_io_bar_idx  = 2;
+    proxy->modern_mem_bar_idx = 4;
+
+    proxy->common.offset = 0x0;
+    proxy->common.size = 0x1000;
+    proxy->common.type = VIRTIO_PCI_CAP_COMMON_CFG;
+
+    proxy->isr.offset = 0x1000;
+    proxy->isr.size = 0x1000;
+    proxy->isr.type = VIRTIO_PCI_CAP_ISR_CFG;
+
+    proxy->device.offset = 0x2000;
+    proxy->device.size = 0x1000;
+    proxy->device.type = VIRTIO_PCI_CAP_DEVICE_CFG;
+
+    proxy->notify.offset = 0x3000;
+    proxy->notify.size = virtio_pci_queue_mem_mult(proxy) * VIRTIO_QUEUE_MAX;
+    proxy->notify.type = VIRTIO_PCI_CAP_NOTIFY_CFG;
+
+    proxy->notify_pio.offset = 0x0;
+    proxy->notify_pio.size = 0x4;
+    proxy->notify_pio.type = VIRTIO_PCI_CAP_NOTIFY_CFG;
+
+    /* subclasses can enforce modern, so do this unconditionally */
+    if (!(proxy->flags & VIRTIO_PCI_FLAG_VDPA)) {
+        memory_region_init(&proxy->modern_bar, OBJECT(proxy), "virtio-pci",
+                           /* PCI BAR regions must be powers of 2 */
+                           pow2ceil(proxy->notify.offset + proxy->notify.size));
+    } else {
+        proxy->lm.offset = proxy->notify.offset + proxy->notify.size;
+        proxy->lm.size = 0x20 + VIRTIO_QUEUE_MAX * 4;
+        memory_region_init(&proxy->modern_bar, OBJECT(proxy), "virtio-pci",
+                           /* PCI BAR regions must be powers of 2 */
+                           pow2ceil(proxy->lm.offset + proxy->lm.size));
+    }
+
+    if (proxy->disable_legacy == ON_OFF_AUTO_AUTO) {
+        proxy->disable_legacy = pcie_port ? ON_OFF_AUTO_ON : ON_OFF_AUTO_OFF;
+    }
+
+    if (!virtio_pci_modern(proxy) && !virtio_pci_legacy(proxy)) {
+        error_setg(errp, "device cannot work as neither modern nor legacy mode"
+                   " is enabled");
+        error_append_hint(errp, "Set either disable-modern or disable-legacy"
+                          " to off\n");
+        return;
+    }
+
+    if (pcie_port && pci_is_express(pci_dev)) {
+        int pos;
+        uint16_t last_pcie_cap_offset = PCI_CONFIG_SPACE_SIZE;
+
+        pos = pcie_endpoint_cap_init(pci_dev, 0);
+        assert(pos > 0);
+
+        pos = pci_add_capability(pci_dev, PCI_CAP_ID_PM, 0,
+                                 PCI_PM_SIZEOF, errp);
+        if (pos < 0) {
+            return;
+        }
+
+        pci_dev->exp.pm_cap = pos;
+
+        /*
+         * Indicates that this function complies with revision 1.2 of the
+         * PCI Power Management Interface Specification.
+         */
+        pci_set_word(pci_dev->config + pos + PCI_PM_PMC, 0x3);
+
+        if (proxy->flags & VIRTIO_PCI_FLAG_AER) {
+            pcie_aer_init(pci_dev, PCI_ERR_VER, last_pcie_cap_offset,
+                          PCI_ERR_SIZEOF, NULL);
+            last_pcie_cap_offset += PCI_ERR_SIZEOF;
+        }
+
+        if (proxy->flags & VIRTIO_PCI_FLAG_INIT_DEVERR) {
+            /* Init error enabling flags */
+            pcie_cap_deverr_init(pci_dev);
+        }
+
+        if (proxy->flags & VIRTIO_PCI_FLAG_INIT_LNKCTL) {
+            /* Init Link Control Register */
+            pcie_cap_lnkctl_init(pci_dev);
+        }
+
+        if (proxy->flags & VIRTIO_PCI_FLAG_INIT_PM) {
+            /* Init Power Management Control Register */
+            pci_set_word(pci_dev->wmask + pos + PCI_PM_CTRL,
+                         PCI_PM_CTRL_STATE_MASK);
+        }
+
+        if (proxy->flags & VIRTIO_PCI_FLAG_ATS) {
+            pcie_ats_init(pci_dev, last_pcie_cap_offset,
+                          proxy->flags & VIRTIO_PCI_FLAG_ATS_PAGE_ALIGNED);
+            last_pcie_cap_offset += PCI_EXT_CAP_ATS_SIZEOF;
+        }
+
+        if (proxy->flags & VIRTIO_PCI_FLAG_INIT_FLR) {
+            /* Set Function Level Reset capability bit */
+            pcie_cap_flr_init(pci_dev);
+        }
+    } else {
+        /*
+         * make future invocations of pci_is_express() return false
+         * and pci_config_size() return PCI_CONFIG_SPACE_SIZE.
+         */
+        pci_dev->cap_present &= ~QEMU_PCI_CAP_EXPRESS;
+    }
+
+    virtio_pci_bus_new(&proxy->bus, sizeof(proxy->bus), proxy);
+    if (k->realize) {
+        k->realize(proxy, errp);
+    }
+}
+
+static void pci_qdev_realize(DeviceState *qdev, Error **errp)
+{
+    PCIDevice *pci_dev = (PCIDevice *)qdev;
+    PCIDeviceClass *pc = PCI_DEVICE_GET_CLASS(pci_dev);
+    ObjectClass *klass = OBJECT_CLASS(pc);
+    Error *local_err = NULL;
+    bool is_default_rom;
+    uint16_t class_id;
+
+    /*
+     * capped by systemd (see: udev-builtin-net_id.c)
+     * as it's the only known user honor it to avoid users
+     * misconfigure QEMU and then wonder why acpi-index doesn't work
+     */
+    if (pci_dev->acpi_index > ONBOARD_INDEX_MAX) {
+        error_setg(errp, "acpi-index should be less or equal to %u",
+                   ONBOARD_INDEX_MAX);
+        return;
+    }
+
+    /*
+     * make sure that acpi-index is unique across all present PCI devices
+     */
+    if (pci_dev->acpi_index) {
+        GSequence *used_indexes = pci_acpi_index_list();
+
+        if (g_sequence_lookup(used_indexes,
+                              GINT_TO_POINTER(pci_dev->acpi_index),
+                              g_cmp_uint32, NULL)) {
+            error_setg(errp, "a PCI device with acpi-index = %" PRIu32
+                       " already exist", pci_dev->acpi_index);
+            return;
+        }
+        g_sequence_insert_sorted(used_indexes,
+                                 GINT_TO_POINTER(pci_dev->acpi_index),
+                                 g_cmp_uint32, NULL);
+    }
+
+    if (pci_dev->romsize != -1 && !is_power_of_2(pci_dev->romsize)) {
+        error_setg(errp, "ROM size %u is not a power of two", pci_dev->romsize);
+        return;
+    }
+
+    /* initialize cap_present for pci_is_express() and pci_config_size(),
+     * Note that hybrid PCIs are not set automatically and need to manage
+     * QEMU_PCI_CAP_EXPRESS manually */
+    if (object_class_dynamic_cast(klass, INTERFACE_PCIE_DEVICE) &&
+       !object_class_dynamic_cast(klass, INTERFACE_CONVENTIONAL_PCI_DEVICE)) {
+        pci_dev->cap_present |= QEMU_PCI_CAP_EXPRESS;
+    }
+
+    if (object_class_dynamic_cast(klass, INTERFACE_CXL_DEVICE)) {
+        pci_dev->cap_present |= QEMU_PCIE_CAP_CXL;
+    }
+
+    pci_dev = do_pci_register_device(pci_dev,
+                                     object_get_typename(OBJECT(qdev)),
+                                     pci_dev->devfn, errp);
+    if (pci_dev == NULL)
+        return;
+
+    if (pc->realize) {
+        pc->realize(pci_dev, &local_err);
+        if (local_err) {
+            error_propagate(errp, local_err);
+            do_pci_unregister_device(pci_dev);
+            return;
+        }
+    }
+
+    /*
+     * A PCIe Downstream Port that do not have ARI Forwarding enabled must
+     * associate only Device 0 with the device attached to the bus
+     * representing the Link from the Port (PCIe base spec rev 4.0 ver 0.3,
+     * sec 7.3.1).
+     * With ARI, PCI_SLOT() can return non-zero value as the traditional
+     * 5-bit Device Number and 3-bit Function Number fields in its associated
+     * Routing IDs, Requester IDs and Completer IDs are interpreted as a
+     * single 8-bit Function Number. Hence, ignore ARI capable devices.
+     */
+    if (pci_is_express(pci_dev) &&
+        !pcie_find_capability(pci_dev, PCI_EXT_CAP_ID_ARI) &&
+        pcie_has_upstream_port(pci_dev) &&
+        PCI_SLOT(pci_dev->devfn)) {
+        warn_report("PCI: slot %d is not valid for %s,"
+                    " parent device only allows plugging into slot 0.",
+                    PCI_SLOT(pci_dev->devfn), pci_dev->name);
+    }
+
+    if (pci_dev->failover_pair_id) {
+        if (!pci_bus_is_express(pci_get_bus(pci_dev))) {
+            error_setg(errp, "failover primary device must be on "
+                             "PCIExpress bus");
+            pci_qdev_unrealize(DEVICE(pci_dev));
+            return;
+        }
+        class_id = pci_get_word(pci_dev->config + PCI_CLASS_DEVICE);
+        if (class_id != PCI_CLASS_NETWORK_ETHERNET) {
+            error_setg(errp, "failover primary device is not an "
+                             "Ethernet device");
+            pci_qdev_unrealize(DEVICE(pci_dev));
+            return;
+        }
+        if ((pci_dev->cap_present & QEMU_PCI_CAP_MULTIFUNCTION)
+            || (PCI_FUNC(pci_dev->devfn) != 0)) {
+            error_setg(errp, "failover: primary device must be in its own "
+                              "PCI slot");
+            pci_qdev_unrealize(DEVICE(pci_dev));
+            return;
+        }
+        qdev->allow_unplug_during_migration = true;
+    }
+
+    /* rom loading */
+    is_default_rom = false;
+    if (pci_dev->romfile == NULL && pc->romfile != NULL) {
+        pci_dev->romfile = g_strdup(pc->romfile);
+        is_default_rom = true;
+    }
+
+    pci_add_option_rom(pci_dev, is_default_rom, &local_err);
+    if (local_err) {
+        error_propagate(errp, local_err);
+        pci_qdev_unrealize(DEVICE(pci_dev));
+        return;
+    }
+
+    pci_set_power(pci_dev, true);
+
+    pci_dev->msi_trigger = pci_msi_trigger;
+}
+```
+可以看到，在实例化设备时，基于[**device_set_realized()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L470)，不停调用子类在类初始化时覆盖的**realize**函数指针，从而完成最终的实例化。
+
+**virtio**相关的实例化在[**virtio_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2272)，
+
+# ~~virtio驱动~~
 
 # 参考
 
@@ -196,3 +982,4 @@ struct virtq_used_elem {
 5. [Virtqueues and virtio ring: How the data travels](https://www.redhat.com/en/blog/virtqueues-and-virtio-ring-how-data-travels)
 6. [【原创】Linux虚拟化KVM-Qemu分析（十一）之virtqueue](https://www.cnblogs.com/LoyenWang/p/14589296.html)
 7. [Virtio协议概述](https://www.openeuler.org/zh/blog/yorifang/virtio-spec-overview.html)
+8. [VirtIO实现原理——PCI基础](https://blog.csdn.net/huang987246510/article/details/103379926)
