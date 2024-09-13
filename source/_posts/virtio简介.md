@@ -969,7 +969,9 @@ static void pci_qdev_realize(DeviceState *qdev, Error **errp)
 ```
 可以看到，在实例化设备时，基于[**device_set_realized()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L470)，不停调用子类在类初始化时覆盖的**realize**函数指针，从而完成最终的实例化。
 
-**virtio**相关的实例化在[**virtio_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2272)，
+**virtio**相关的实例化在[**virtio_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2272)，其分配了**VIRTIO_PCI_CAP_COMMON_CFG**、**VIRTIO_PCI_CAP_ISR_CFG**、**VIRTIO_PCI_CAP_DEVICE_CFG**和io的**VIRTIO_PCI_CAP_NOTIFY_CFG**数据等。
+
+## ~~virtio初始化~~~
 
 # ~~virtio驱动~~
 
