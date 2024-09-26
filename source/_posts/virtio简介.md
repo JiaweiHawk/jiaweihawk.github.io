@@ -581,26 +581,24 @@ static void virtio_net_pci_class_init(ObjectClass *klass, void *data)
 
 **virtio设备**使用[**virtio_net_pci_instance_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L83)和[**device_initfn()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/core/qdev.c#L652)来初始化对应的对象数据结构，如下所示
 ```c
-//#0  virtio_net_pci_instance_init (obj=0x5555580a50b0) at ../../qemu/hw/virtio/virtio-net-pci.c:85
-//#1  0x0000555555ea30e0 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0880) at ../../qemu/qom/object.c:429
-//#2  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0a40) at ../../qemu/qom/object.c:425
-//#3  0x0000555555ea36a6 in object_initialize_with_type (obj=0x5555580a50b0, size=43376, type=0x5555570e0a40) at ../../qemu/qom/object.c:571
-//#4  0x0000555555ea3e75 in object_new_with_type (type=0x5555570e0a40) at ../../qemu/qom/object.c:791
-//#5  0x0000555555ea3eb1 in object_new_with_class (klass=0x55555717e490) at ../../qemu/qom/object.c:799
-//#6  0x0000555555c3d234 in qemu_get_nic_models (device_type=0x55555623a47a "pci-device") at ../../qemu/net/net.c:968
-//#7  0x0000555555c3db78 in qemu_create_nic_bus_devices (bus=0x555557415420, parent_type=0x55555623a47a "pci-device", default_model=0x5555562ab765 "e1000", alias=0x55555623b21d "virtio", alias_target=0x55555623b20e "virtio-net-pci") at ../../qemu/net/net.c:1188
-//#8  0x0000555555a9a0da in pci_init_nic_devices (bus=0x555557415420, default_model=0x5555562ab765 "e1000") at ../../qemu/hw/pci/pci.c:1861
-//#9  0x0000555555cd3d69 in pc_nic_init (pcmc=0x5555572bb030, isa_bus=0x555557163a00, pci_bus=0x555557415420) at ../../qemu/hw/i386/pc.c:1283
-//#10 0x0000555555cb2ed4 in pc_init1 (machine=0x555557357800, pci_type=0x5555562ab7db "i440FX") at ../../qemu/hw/i386/pc_piix.c:323
-//#11 0x0000555555cb35e3 in pc_init_v9_0 (machine=0x555557357800) at ../../qemu/hw/i386/pc_piix.c:523
-//#12 0x000055555595f8be in machine_run_board_init (machine=0x555557357800, mem_path=0x0, errp=0x7fffffffd710) at ../../qemu/hw/core/machine.c:1547
-//#13 0x0000555555bdbc78 in qemu_init_board () at ../../qemu/system/vl.c:2613
-//#14 0x0000555555bdbf87 in qmp_x_exit_preconfig (errp=0x555557061f60 <error_fatal>) at ../../qemu/system/vl.c:2705
-//#15 0x0000555555bde944 in qemu_init (argc=35, argv=0x7fffffffda48) at ../../qemu/system/vl.c:3739
-//#16 0x0000555555e96f93 in main (argc=35, argv=0x7fffffffda48) at ../../qemu/system/main.c:47
-//#17 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=35, argv=argv@entry=0x7fffffffda48) at ../sysdeps/nptl/libc_start_call_main.h:58
-//#18 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=35, argv=0x7fffffffda48, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffda38) at ../csu/libc-start.c:392
-//#19 0x000055555586cc95 in _start ()
+//#0  virtio_net_pci_instance_init (obj=0x5555580bdd70) at ../../qemu/hw/virtio/virtio-net-pci.c:85
+//#1  0x0000555555ea793a in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570e88f0) at ../../qemu/qom/object.c:429
+//#2  0x0000555555ea791c in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570e8ab0) at ../../qemu/qom/object.c:425
+//#3  0x0000555555ea7f00 in object_initialize_with_type (obj=0x5555580bdd70, size=43376, type=0x5555570e8ab0) at ../../qemu/qom/object.c:571
+//#4  0x0000555555ea86cf in object_new_with_type (type=0x5555570e8ab0) at ../../qemu/qom/object.c:791
+//#5  0x0000555555ea873b in object_new (typename=0x5555580bbfd0 "virtio-net-pci") at ../../qemu/qom/object.c:806
+//#6  0x0000555555e9ff6a in qdev_new (name=0x5555580bbfd0 "virtio-net-pci") at ../../qemu/hw/core/qdev.c:166
+//#7  0x0000555555bd01c4 in qdev_device_add_from_qdict (opts=0x5555580bc3b0, from_json=false, errp=0x7fffffffd6a0) at ../../qemu/system/qdev-monitor.c:681
+//#8  0x0000555555bd03d9 in qdev_device_add (opts=0x5555570f7230, errp=0x55555706a160 <error_fatal>) at ../../qemu/system/qdev-monitor.c:737
+//#9  0x0000555555bda4e7 in device_init_func (opaque=0x0, opts=0x5555570f7230, errp=0x55555706a160 <error_fatal>) at ../../qemu/system/vl.c:1200
+//#10 0x00005555560c2a63 in qemu_opts_foreach (list=0x555556f53ec0 <qemu_device_opts>, func=0x555555bda4bc <device_init_func>, opaque=0x0, errp=0x55555706a160 <error_fatal>) at ../../qemu/util/qemu-option.c:1135
+//#11 0x0000555555bde1b8 in qemu_create_cli_devices () at ../../qemu/system/vl.c:2637
+//#12 0x0000555555bde3fe in qmp_x_exit_preconfig (errp=0x55555706a160 <error_fatal>) at ../../qemu/system/vl.c:2706
+//#13 0x0000555555be0db6 in qemu_init (argc=39, argv=0x7fffffffdae8) at ../../qemu/system/vl.c:3739
+//#14 0x0000555555e9b7ed in main (argc=39, argv=0x7fffffffdae8) at ../../qemu/system/main.c:47
+//#15 0x00007ffff7629d90 in __libc_start_call_main (main=main@entry=0x555555e9b7c9 <main>, argc=argc@entry=39, argv=argv@entry=0x7fffffffdae8) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#16 0x00007ffff7629e40 in __libc_start_main_impl (main=0x555555e9b7c9 <main>, argc=39, argv=0x7fffffffdae8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdad8) at ../csu/libc-start.c:392
+//#17 0x000055555586f0d5 in _start ()
 static void virtio_net_pci_instance_init(Object *obj)
 {
     VirtIONetPCI *dev = VIRTIO_NET_PCI(obj);
@@ -611,29 +609,27 @@ static void virtio_net_pci_instance_init(Object *obj)
                               "bootindex");
 }
 
-//#0  device_initfn (obj=0x5555580a50b0) at ../../qemu/hw/core/qdev.c:654
-//#1  0x0000555555ea30e0 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e4430) at ../../qemu/qom/object.c:429
-//#2  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x55555709f7c0) at ../../qemu/qom/object.c:425
-//#3  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570ada10) at ../../qemu/qom/object.c:425
-//#4  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0880) at ../../qemu/qom/object.c:425
-//#5  0x0000555555ea30c2 in object_init_with_type (obj=0x5555580a50b0, ti=0x5555570e0a40) at ../../qemu/qom/object.c:425
-//#6  0x0000555555ea36a6 in object_initialize_with_type (obj=0x5555580a50b0, size=43376, type=0x5555570e0a40) at ../../qemu/qom/object.c:571
-//#7  0x0000555555ea3e75 in object_new_with_type (type=0x5555570e0a40) at ../../qemu/qom/object.c:791
-//#8  0x0000555555ea3eb1 in object_new_with_class (klass=0x55555717e490) at ../../qemu/qom/object.c:799
-//#9  0x0000555555c3d234 in qemu_get_nic_models (device_type=0x55555623a47a "pci-device") at ../../qemu/net/net.c:968
-//#10 0x0000555555c3db78 in qemu_create_nic_bus_devices (bus=0x555557415420, parent_type=0x55555623a47a "pci-device", default_model=0x5555562ab765 "e1000", alias=0x55555623b21d "virtio", alias_target=0x55555623b20e "virtio-net-pci") at ../../qemu/net/net.c:1188
-//#11 0x0000555555a9a0da in pci_init_nic_devices (bus=0x555557415420, default_model=0x5555562ab765 "e1000") at ../../qemu/hw/pci/pci.c:1861
-//#12 0x0000555555cd3d69 in pc_nic_init (pcmc=0x5555572bb030, isa_bus=0x555557163a00, pci_bus=0x555557415420) at ../../qemu/hw/i386/pc.c:1283
-//#13 0x0000555555cb2ed4 in pc_init1 (machine=0x555557357800, pci_type=0x5555562ab7db "i440FX") at ../../qemu/hw/i386/pc_piix.c:323
-//#14 0x0000555555cb35e3 in pc_init_v9_0 (machine=0x555557357800) at ../../qemu/hw/i386/pc_piix.c:523
-//#15 0x000055555595f8be in machine_run_board_init (machine=0x555557357800, mem_path=0x0, errp=0x7fffffffd710) at ../../qemu/hw/core/machine.c:1547
-//#16 0x0000555555bdbc78 in qemu_init_board () at ../../qemu/system/vl.c:2613
-//#17 0x0000555555bdbf87 in qmp_x_exit_preconfig (errp=0x555557061f60 <error_fatal>) at ../../qemu/system/vl.c:2705
-//#18 0x0000555555bde944 in qemu_init (argc=35, argv=0x7fffffffda48) at ../../qemu/system/vl.c:3739
-//#19 0x0000555555e96f93 in main (argc=35, argv=0x7fffffffda48) at ../../qemu/system/main.c:47
-//#20 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=35, argv=argv@entry=0x7fffffffda48) at ../sysdeps/nptl/libc_start_call_main.h:58
-//#21 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=35, argv=0x7fffffffda48, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffda38) at ../csu/libc-start.c:392
-//#22 0x000055555586cc95 in _start ()
+//#0  device_initfn (obj=0x5555580bdd70) at ../../qemu/hw/core/qdev.c:654
+//#1  0x0000555555ea793a in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570ec4a0) at ../../qemu/qom/object.c:429
+//#2  0x0000555555ea791c in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570a7830) at ../../qemu/qom/object.c:425
+//#3  0x0000555555ea791c in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570b5a80) at ../../qemu/qom/object.c:425
+//#4  0x0000555555ea791c in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570e88f0) at ../../qemu/qom/object.c:425
+//#5  0x0000555555ea791c in object_init_with_type (obj=0x5555580bdd70, ti=0x5555570e8ab0) at ../../qemu/qom/object.c:425
+//#6  0x0000555555ea7f00 in object_initialize_with_type (obj=0x5555580bdd70, size=43376, type=0x5555570e8ab0) at ../../qemu/qom/object.c:571
+//#7  0x0000555555ea86cf in object_new_with_type (type=0x5555570e8ab0) at ../../qemu/qom/object.c:791
+//#8  0x0000555555ea873b in object_new (typename=0x5555580bbfd0 "virtio-net-pci") at ../../qemu/qom/object.c:806
+//#9  0x0000555555e9ff6a in qdev_new (name=0x5555580bbfd0 "virtio-net-pci") at ../../qemu/hw/core/qdev.c:166
+//#10 0x0000555555bd01c4 in qdev_device_add_from_qdict (opts=0x5555580bc3b0, from_json=false, errp=0x7fffffffd690) at ../../qemu/system/qdev-monitor.c:681
+//#11 0x0000555555bd03d9 in qdev_device_add (opts=0x5555570f7230, errp=0x55555706a160 <error_fatal>) at ../../qemu/system/qdev-monitor.c:737
+//#12 0x0000555555bda4e7 in device_init_func (opaque=0x0, opts=0x5555570f7230, errp=0x55555706a160 <error_fatal>) at ../../qemu/system/vl.c:1200
+//#13 0x00005555560c2a63 in qemu_opts_foreach (list=0x555556f53ec0 <qemu_device_opts>, func=0x555555bda4bc <device_init_func>, opaque=0x0, errp=0x55555706a160 <error_fatal>) at ../../qemu/util/qemu-option.c:1135
+//#14 0x0000555555bde1b8 in qemu_create_cli_devices () at ../../qemu/system/vl.c:2637
+//#15 0x0000555555bde3fe in qmp_x_exit_preconfig (errp=0x55555706a160 <error_fatal>) at ../../qemu/system/vl.c:2706
+//#16 0x0000555555be0db6 in qemu_init (argc=39, argv=0x7fffffffdad8) at ../../qemu/system/vl.c:3739
+//#17 0x0000555555e9b7ed in main (argc=39, argv=0x7fffffffdad8) at ../../qemu/system/main.c:47
+//#18 0x00007ffff7629d90 in __libc_start_call_main (main=main@entry=0x555555e9b7c9 <main>, argc=argc@entry=39, argv=argv@entry=0x7fffffffdad8) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#19 0x00007ffff7629e40 in __libc_start_main_impl (main=0x555555e9b7c9 <main>, argc=39, argv=0x7fffffffdad8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdac8) at ../csu/libc-start.c:392
+//#20 0x000055555586f0d5 in _start ()
 static void device_initfn(Object *obj)
 {
     DeviceState *dev = DEVICE(obj);
