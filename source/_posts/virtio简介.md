@@ -1461,7 +1461,250 @@ void virtio_bus_device_plugged(VirtIODevice *vdev, Error **errp)
 
 整体来看，**virtio设备**实例化时会分别实例化**virtio transport**和**virtio设备**，这样子具有更好的拓展性。
 
-## ~~virtio初始化~~~
+## virtio初始化
+
+在qemu实例化完**virtio-net-pci**设备后，需要与**guest驱动**通信完成**virtio**的初始化，即virtio各个组件的初始化
+
+### virtio结构的配置空间
+
+根据前面[virtio transport](#virtio-transport)章节可知，**virtio-net-pci**设备**PCI配置空间**的capability指定着virtio各个组件的配置空间
+
+![virtio的PCI配置空间](virtio的PCI配置空间.png)
+
+因此首先就需要初始化**virtio结构的配置空间**，即根据capability确定组件配置空间的**BAR**。
+
+在前面[virtio设备的实例化](#实例化)中，[**virtio_pci_device_plugged()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2089)将所有capability配置空间设置在**proxy->modern_bar**上。
+```c
+/* This is called by virtio-bus just after the device is plugged. */
+static void virtio_pci_device_plugged(DeviceState *d, Error **errp)
+{
+    ...
+    struct virtio_pci_cap cap = {
+        .cap_len = sizeof cap,
+    };
+    struct virtio_pci_notify_cap notify = {
+        .cap.cap_len = sizeof notify,
+        .notify_off_multiplier =
+            cpu_to_le32(virtio_pci_queue_mem_mult(proxy)),
+    };
+    struct virtio_pci_cfg_cap cfg = {
+        .cap.cap_len = sizeof cfg,
+        .cap.cfg_type = VIRTIO_PCI_CAP_PCI_CFG,
+    };
+    struct virtio_pci_notify_cap notify_pio = {
+        .cap.cap_len = sizeof notify,
+        .notify_off_multiplier = cpu_to_le32(0x0),
+    };
+
+    struct virtio_pci_cfg_cap *cfg_mask;
+    ...
+    virtio_pci_modern_mem_region_map(proxy, &proxy->common, &cap);
+    virtio_pci_modern_mem_region_map(proxy, &proxy->isr, &cap);
+    virtio_pci_modern_mem_region_map(proxy, &proxy->device, &cap);
+    virtio_pci_modern_mem_region_map(proxy, &proxy->notify, &notify.cap);
+    ...
+    pci_register_bar(&proxy->pci_dev, proxy->modern_mem_bar_idx,
+                     PCI_BASE_ADDRESS_SPACE_MEMORY |
+                     PCI_BASE_ADDRESS_MEM_PREFETCH |
+                     PCI_BASE_ADDRESS_MEM_TYPE_64,
+                     &proxy->modern_bar);
+}
+
+static void virtio_pci_modern_mem_region_map(VirtIOPCIProxy *proxy,
+                                             VirtIOPCIRegion *region,
+                                             struct virtio_pci_cap *cap)
+{
+    virtio_pci_modern_region_map(proxy, region, cap,
+                                 &proxy->modern_bar, proxy->modern_mem_bar_idx);
+}
+
+static void virtio_pci_modern_region_map(VirtIOPCIProxy *proxy,
+                                         VirtIOPCIRegion *region,
+                                         struct virtio_pci_cap *cap,
+                                         MemoryRegion *mr,
+                                         uint8_t bar)
+{
+    memory_region_add_subregion(mr, region->offset, &region->mr);
+
+    cap->cfg_type = region->type;
+    cap->bar = bar;
+    cap->offset = cpu_to_le32(region->offset);
+    cap->length = cpu_to_le32(region->size);
+    virtio_pci_add_mem_cap(proxy, cap);
+
+}
+```
+
+而**proxy->modern_mem_bar_idx**在[**virtio_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2272)中被设置为4，即capability配置空间被设置在**BAR4**上
+```c
+static void virtio_pci_realize(PCIDevice *pci_dev, Error **errp)
+{
+    ...
+    /*
+     * virtio pci bar layout used by default.
+     * subclasses can re-arrange things if needed.
+     *
+     *   region 0   --  virtio legacy io bar
+     *   region 1   --  msi-x bar
+     *   region 2   --  virtio modern io bar (off by default)
+     *   region 4+5 --  virtio modern memory (64bit) bar
+     *
+     */
+    proxy->modern_mem_bar_idx = 4;
+    ...
+}
+```
+
+根据{% post_link qemu的PCI设备 %}可知，**guest驱动**在**PCI配置空间**中设置**BAR4**的物理地址即可完成virtio结构的配置空间的初始化
+```c
+//#0  pci_default_write_config (d=0x5555580bdd70, addr=32, val_in=4294967295, l=4) at ../../qemu/hw/pci/pci.c:1594
+//#1  0x0000555555b729ad in virtio_write_config (pci_dev=0x5555580bdd70, address=32, val=4294967295, len=4) at ../../qemu/hw/virtio/virtio-pci.c:747
+//#2  0x0000555555aa0c9a in pci_host_config_write_common (pci_dev=0x5555580bdd70, addr=32, limit=256, val=4294967295, len=4) at ../../qemu/hw/pci/pci_host.c:96
+//#3  0x0000555555aa0ee6 in pci_data_write (s=0x555557430730, addr=2147489824, val=4294967295, len=4) at ../../qemu/hw/pci/pci_host.c:138
+//#4  0x0000555555aa10bb in pci_host_data_write (opaque=0x5555573f9ad0, addr=0, val=4294967295, len=4) at ../../qemu/hw/pci/pci_host.c:188
+//#5  0x0000555555e1e25a in memory_region_write_accessor (mr=0x5555573f9f10, addr=0, value=0x7ffff65ff598, size=4, shift=0, mask=4294967295, attrs=...) at ../../qemu/system/memory.c:497
+//#6  0x0000555555e1e593 in access_with_adjusted_size (addr=0, value=0x7ffff65ff598, size=4, access_size_min=1, access_size_max=4, access_fn=0x555555e1e160 <memory_region_write_accessor>, mr=0x5555573f9f10, attrs=...) at ../../qemu/system/memory.c:573
+//#7  0x0000555555e218ad in memory_region_dispatch_write (mr=0x5555573f9f10, addr=0, data=4294967295, op=MO_32, attrs=...) at ../../qemu/system/memory.c:1521
+//#8  0x0000555555e2fffa in flatview_write_continue_step (attrs=..., buf=0x7ffff7f8a000 "\377\377\377\377", len=4, mr_addr=0, l=0x7ffff65ff680, mr=0x5555573f9f10) at ../../qemu/system/physmem.c:2713
+//#9  0x0000555555e300ca in flatview_write_continue (fv=0x7ffee8043b90, addr=3324, attrs=..., ptr=0x7ffff7f8a000, len=4, mr_addr=0, l=4, mr=0x5555573f9f10) at ../../qemu/system/physmem.c:2743
+//#10 0x0000555555e301dc in flatview_write (fv=0x7ffee8043b90, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2774
+//#11 0x0000555555e3062a in address_space_write (as=0x555557055e80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4) at ../../qemu/system/physmem.c:2894
+//#12 0x0000555555e306a6 in address_space_rw (as=0x555557055e80 <address_space_io>, addr=3324, attrs=..., buf=0x7ffff7f8a000, len=4, is_write=true) at ../../qemu/system/physmem.c:2904
+//#13 0x0000555555e89cd0 in kvm_handle_io (port=3324, attrs=..., data=0x7ffff7f8a000, direction=1, size=4, count=1) at ../../qemu/accel/kvm/kvm-all.c:2631
+//#14 0x0000555555e8a640 in kvm_cpu_exec (cpu=0x5555573bc6a0) at ../../qemu/accel/kvm/kvm-all.c:2903
+//#15 0x0000555555e8d712 in kvm_vcpu_thread_fn (arg=0x5555573bc6a0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#16 0x00005555560b6f08 in qemu_thread_start (args=0x5555573c5850) at ../../qemu/util/qemu-thread-posix.c:541
+//#17 0x00007ffff7694ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#18 0x00007ffff7726850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val_in, int l)
+{
+    ...
+    if (ranges_overlap(addr, l, PCI_BASE_ADDRESS_0, 24) ||
+        ranges_overlap(addr, l, PCI_ROM_ADDRESS, 4) ||
+        ranges_overlap(addr, l, PCI_ROM_ADDRESS1, 4) ||
+        range_covers_byte(addr, l, PCI_COMMAND))
+        pci_update_mappings(d);
+    ...
+}
+```
+
+### virtio组件
+
+根据前面[virtio transport](#virtio-transport)章节，virtio组件通过对应的配置空间进行设置。而virtio结构的配置空间在前面[virtio结构的配置空间](#virtio结构的配置空间)完成初始化，映射入**AddressSpace**中。 此时**guest**即可通过读写组件的配置空间完成组件的初始化。
+
+具体的，在实例化时[**virtio_pci_device_plugged()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2089)为每一个virito结构的配置空间分配了一个单独的MemoryRegion，则**guest**读写组件的配置空间即可触发对应MemoryRegion的回调函数，完成virtio组件的设置
+```c
+/* This is called by virtio-bus just after the device is plugged. */
+static void virtio_pci_device_plugged(DeviceState *d, Error **errp)
+{
+    ...
+    virtio_pci_modern_regions_init(proxy, vdev->name);
+    ...
+}
+
+static void virtio_pci_modern_regions_init(VirtIOPCIProxy *proxy,
+                                           const char *vdev_name)
+{
+    static const MemoryRegionOps common_ops = {
+        .read = virtio_pci_common_read,
+        .write = virtio_pci_common_write,
+        .impl = {
+            .min_access_size = 1,
+            .max_access_size = 4,
+        },
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+    static const MemoryRegionOps isr_ops = {
+        .read = virtio_pci_isr_read,
+        .write = virtio_pci_isr_write,
+        .impl = {
+            .min_access_size = 1,
+            .max_access_size = 4,
+        },
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+    static const MemoryRegionOps device_ops = {
+        .read = virtio_pci_device_read,
+        .write = virtio_pci_device_write,
+        .impl = {
+            .min_access_size = 1,
+            .max_access_size = 4,
+        },
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+    static const MemoryRegionOps notify_ops = {
+        .read = virtio_pci_notify_read,
+        .write = virtio_pci_notify_write,
+        .impl = {
+            .min_access_size = 1,
+            .max_access_size = 4,
+        },
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+    static const MemoryRegionOps notify_pio_ops = {
+        .read = virtio_pci_notify_read,
+        .write = virtio_pci_notify_write_pio,
+        .impl = {
+            .min_access_size = 1,
+            .max_access_size = 4,
+        },
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+    static const MemoryRegionOps lm_ops = {
+        .read = virtio_pci_lm_read,
+        .write = virtio_pci_lm_write,
+        .impl = {
+            .min_access_size = 1,
+            .max_access_size = 4,
+        },
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+    g_autoptr(GString) name = g_string_new(NULL);
+
+    g_string_printf(name, "virtio-pci-common-%s", vdev_name);
+    memory_region_init_io(&proxy->common.mr, OBJECT(proxy),
+                          &common_ops,
+                          proxy,
+                          name->str,
+                          proxy->common.size);
+
+    g_string_printf(name, "virtio-pci-isr-%s", vdev_name);
+    memory_region_init_io(&proxy->isr.mr, OBJECT(proxy),
+                          &isr_ops,
+                          proxy,
+                          name->str,
+                          proxy->isr.size);
+
+    g_string_printf(name, "virtio-pci-device-%s", vdev_name);
+    memory_region_init_io(&proxy->device.mr, OBJECT(proxy),
+                          &device_ops,
+                          proxy,
+                          name->str,
+                          proxy->device.size);
+
+    g_string_printf(name, "virtio-pci-notify-%s", vdev_name);
+    memory_region_init_io(&proxy->notify.mr, OBJECT(proxy),
+                          &notify_ops,
+                          proxy,
+                          name->str,
+                          proxy->notify.size);
+
+    g_string_printf(name, "virtio-pci-notify-pio-%s", vdev_name);
+    memory_region_init_io(&proxy->notify_pio.mr, OBJECT(proxy),
+                          &notify_pio_ops,
+                          proxy,
+                          name->str,
+                          proxy->notify_pio.size);
+    if (proxy->flags & VIRTIO_PCI_FLAG_VDPA) {
+        g_string_printf(name, "virtio-pci-lm-%s", vdev_name);
+        memory_region_init_io(&proxy->lm.mr, OBJECT(proxy),
+                          &lm_ops,
+                          proxy,
+                          name->str,
+                          proxy->lm.size);
+    }
+}
+```
 
 # ~~virtio驱动~~
 
