@@ -1706,6 +1706,155 @@ static void virtio_pci_modern_regions_init(VirtIOPCIProxy *proxy,
 }
 ```
 
+这里重点介绍一下**VIRTIO_PCI_CAP_COMMON_CFG**设置空间的回调函数，根据前面[VIRTIO_PCI_CAP_COMMON_CFG配置空间](#配置空间)章节可知，读写其字段可以设置**virtqueue**和**feature bits**等组件。根据前面[virtio组件](#virtio组件)章节中代码可知，qemu使用[**virtio_pci_common_writes()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L1686)来进行设置的
+
+```c
+//#0  virtio_pci_common_write (opaque=0x5555580bdd70, addr=22, val=0, size=2) at ../../qemu/hw/virtio/virtio-pci.c:1689
+//#1  0x0000555555e1e25a in memory_region_write_accessor (mr=0x5555580be8b0, addr=22, value=0x7ffff5bff5d8, size=2, shift=0, mask=65535, attrs=...) at ../../qemu/system/memory.c:497
+//#2  0x0000555555e1e593 in access_with_adjusted_size (addr=22, value=0x7ffff5bff5d8, size=2, access_size_min=1, access_size_max=4, access_fn=0x555555e1e160 <memory_region_write_accessor>, mr=0x5555580be8b0, attrs=...) at ../../qemu/system/memory.c:573
+//#3  0x0000555555e218ad in memory_region_dispatch_write (mr=0x5555580be8b0, addr=22, data=0, op=MO_16, attrs=...) at ../../qemu/system/memory.c:1521
+//#4  0x0000555555e2fffa in flatview_write_continue_step (attrs=..., buf=0x7ffff7f86028 "", len=2, mr_addr=22, l=0x7ffff5bff6c0, mr=0x5555580be8b0) at ../../qemu/system/physmem.c:2713
+//#5  0x0000555555e300ca in flatview_write_continue (fv=0x7ffee0703240, addr=481036337174, attrs=..., ptr=0x7ffff7f86028, len=2, mr_addr=22, l=2, mr=0x5555580be8b0) at ../../qemu/system/physmem.c:2743
+//#6  0x0000555555e301dc in flatview_write (fv=0x7ffee0703240, addr=481036337174, attrs=..., buf=0x7ffff7f86028, len=2) at ../../qemu/system/physmem.c:2774
+//#7  0x0000555555e3062a in address_space_write (as=0x555557055ee0 <address_space_memory>, addr=481036337174, attrs=..., buf=0x7ffff7f86028, len=2) at ../../qemu/system/physmem.c:2894
+//#8  0x0000555555e306a6 in address_space_rw (as=0x555557055ee0 <address_space_memory>, addr=481036337174, attrs=..., buf=0x7ffff7f86028, len=2, is_write=true) at ../../qemu/system/physmem.c:2904
+//#9  0x0000555555e8a690 in kvm_cpu_exec (cpu=0x5555573ef900) at ../../qemu/accel/kvm/kvm-all.c:2912
+//#10 0x0000555555e8d712 in kvm_vcpu_thread_fn (arg=0x5555573ef900) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#11 0x00005555560b6f08 in qemu_thread_start (args=0x5555573f8ad0) at ../../qemu/util/qemu-thread-posix.c:541
+//#12 0x00007ffff7694ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#13 0x00007ffff7726850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+static void virtio_pci_common_write(void *opaque, hwaddr addr,
+                                    uint64_t val, unsigned size)
+{
+    VirtIOPCIProxy *proxy = opaque;
+    VirtIODevice *vdev = virtio_bus_get_device(&proxy->bus);
+    uint16_t vector;
+
+    if (vdev == NULL) {
+        return;
+    }
+
+    switch (addr) {
+    case VIRTIO_PCI_COMMON_DFSELECT:
+        proxy->dfselect = val;
+        break;
+    case VIRTIO_PCI_COMMON_GFSELECT:
+        proxy->gfselect = val;
+        break;
+    case VIRTIO_PCI_COMMON_GF:
+        if (proxy->gfselect < ARRAY_SIZE(proxy->guest_features)) {
+            proxy->guest_features[proxy->gfselect] = val;
+            virtio_set_features(vdev,
+                                (((uint64_t)proxy->guest_features[1]) << 32) |
+                                proxy->guest_features[0]);
+        }
+        break;
+    case VIRTIO_PCI_COMMON_MSIX:
+        if (vdev->config_vector != VIRTIO_NO_VECTOR) {
+            msix_vector_unuse(&proxy->pci_dev, vdev->config_vector);
+        }
+        /* Make it possible for guest to discover an error took place. */
+        if (val < proxy->nvectors) {
+            msix_vector_use(&proxy->pci_dev, val);
+        } else {
+            val = VIRTIO_NO_VECTOR;
+        }
+        vdev->config_vector = val;
+        break;
+    case VIRTIO_PCI_COMMON_STATUS:
+        if (!(val & VIRTIO_CONFIG_S_DRIVER_OK)) {
+            virtio_pci_stop_ioeventfd(proxy);
+        }
+
+        virtio_set_status(vdev, val & 0xFF);
+
+        if (val & VIRTIO_CONFIG_S_DRIVER_OK) {
+            virtio_pci_start_ioeventfd(proxy);
+        }
+
+        if (vdev->status == 0) {
+            virtio_pci_reset(DEVICE(proxy));
+        }
+
+        break;
+    case VIRTIO_PCI_COMMON_Q_SELECT:
+        if (val < VIRTIO_QUEUE_MAX) {
+            vdev->queue_sel = val;
+        }
+        break;
+    case VIRTIO_PCI_COMMON_Q_SIZE:
+        proxy->vqs[vdev->queue_sel].num = val;
+        virtio_queue_set_num(vdev, vdev->queue_sel,
+                             proxy->vqs[vdev->queue_sel].num);
+        virtio_init_region_cache(vdev, vdev->queue_sel);
+        break;
+    case VIRTIO_PCI_COMMON_Q_MSIX:
+        vector = virtio_queue_vector(vdev, vdev->queue_sel);
+        if (vector != VIRTIO_NO_VECTOR) {
+            msix_vector_unuse(&proxy->pci_dev, vector);
+        }
+        /* Make it possible for guest to discover an error took place. */
+        if (val < proxy->nvectors) {
+            msix_vector_use(&proxy->pci_dev, val);
+        } else {
+            val = VIRTIO_NO_VECTOR;
+        }
+        virtio_queue_set_vector(vdev, vdev->queue_sel, val);
+        break;
+    case VIRTIO_PCI_COMMON_Q_ENABLE:
+        if (val == 1) {
+            virtio_queue_set_num(vdev, vdev->queue_sel,
+                                 proxy->vqs[vdev->queue_sel].num);
+            virtio_queue_set_rings(vdev, vdev->queue_sel,
+                       ((uint64_t)proxy->vqs[vdev->queue_sel].desc[1]) << 32 |
+                       proxy->vqs[vdev->queue_sel].desc[0],
+                       ((uint64_t)proxy->vqs[vdev->queue_sel].avail[1]) << 32 |
+                       proxy->vqs[vdev->queue_sel].avail[0],
+                       ((uint64_t)proxy->vqs[vdev->queue_sel].used[1]) << 32 |
+                       proxy->vqs[vdev->queue_sel].used[0]);
+            proxy->vqs[vdev->queue_sel].enabled = 1;
+            proxy->vqs[vdev->queue_sel].reset = 0;
+            virtio_queue_enable(vdev, vdev->queue_sel);
+        } else {
+            virtio_error(vdev, "wrong value for queue_enable %"PRIx64, val);
+        }
+        break;
+    case VIRTIO_PCI_COMMON_Q_DESCLO:
+        proxy->vqs[vdev->queue_sel].desc[0] = val;
+        break;
+    case VIRTIO_PCI_COMMON_Q_DESCHI:
+        proxy->vqs[vdev->queue_sel].desc[1] = val;
+        break;
+    case VIRTIO_PCI_COMMON_Q_AVAILLO:
+        proxy->vqs[vdev->queue_sel].avail[0] = val;
+        break;
+    case VIRTIO_PCI_COMMON_Q_AVAILHI:
+        proxy->vqs[vdev->queue_sel].avail[1] = val;
+        break;
+    case VIRTIO_PCI_COMMON_Q_USEDLO:
+        proxy->vqs[vdev->queue_sel].used[0] = val;
+        break;
+    case VIRTIO_PCI_COMMON_Q_USEDHI:
+        proxy->vqs[vdev->queue_sel].used[1] = val;
+        break;
+    case VIRTIO_PCI_COMMON_Q_RESET:
+        if (val == 1) {
+            proxy->vqs[vdev->queue_sel].reset = 1;
+
+            virtio_queue_reset(vdev, vdev->queue_sel);
+
+            proxy->vqs[vdev->queue_sel].reset = 0;
+            proxy->vqs[vdev->queue_sel].enabled = 0;
+        }
+        break;
+    default:
+        break;
+    }
+}
+```
+
+## ~~数据处理~~
+
 # ~~virtio驱动~~
 
 # 参考
