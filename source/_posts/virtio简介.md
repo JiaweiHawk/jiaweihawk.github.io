@@ -1461,9 +1461,9 @@ void virtio_bus_device_plugged(VirtIODevice *vdev, Error **errp)
 
 整体来看，**virtio设备**实例化时会分别实例化**virtio transport**和**virtio设备**，这样子具有更好的拓展性。
 
-## virtio初始化
+## virtio设置
 
-在qemu实例化完**virtio-net-pci**设备后，需要与**guest驱动**通信完成**virtio**的初始化，即virtio各个组件的初始化
+在qemu实例化完**virtio-net-pci**设备后，需要与**guest驱动**通信完成**virtio**的设置，即virtio各个组件的设置
 
 ### virtio结构的配置空间
 
@@ -1471,7 +1471,7 @@ void virtio_bus_device_plugged(VirtIODevice *vdev, Error **errp)
 
 ![virtio的PCI配置空间](virtio的PCI配置空间.png)
 
-因此首先就需要初始化**virtio结构的配置空间**，即根据capability确定组件配置空间的**BAR**。
+因此首先就需要设置**virtio结构的配置空间**，即根据capability确定组件配置空间的**BAR**。
 
 在前面[virtio设备的实例化](#实例化)中，[**virtio_pci_device_plugged()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2089)将所有capability配置空间设置在**proxy->modern_bar**上。
 ```c
@@ -1555,7 +1555,7 @@ static void virtio_pci_realize(PCIDevice *pci_dev, Error **errp)
 }
 ```
 
-根据{% post_link qemu的PCI设备 %}可知，**guest驱动**在**PCI配置空间**中设置**BAR4**的物理地址即可完成virtio结构的配置空间的初始化
+根据{% post_link qemu的PCI设备 %}可知，**guest驱动**在**PCI配置空间**中设置**BAR4**的物理地址即可完成virtio结构的配置空间的设置
 ```c
 //#0  pci_default_write_config (d=0x5555580bdd70, addr=32, val_in=4294967295, l=4) at ../../qemu/hw/pci/pci.c:1594
 //#1  0x0000555555b729ad in virtio_write_config (pci_dev=0x5555580bdd70, address=32, val=4294967295, len=4) at ../../qemu/hw/virtio/virtio-pci.c:747
@@ -1590,7 +1590,7 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val_in, int 
 
 ### virtio组件
 
-根据前面[virtio transport](#virtio-transport)章节，virtio组件通过对应的配置空间进行设置。而virtio结构的配置空间在前面[virtio结构的配置空间](#virtio结构的配置空间)完成初始化，映射入**AddressSpace**中。 此时**guest**即可通过读写组件的配置空间完成组件的初始化。
+根据前面[virtio transport](#virtio-transport)章节，virtio组件通过对应的配置空间进行设置。而virtio结构的配置空间在前面[virtio结构的配置空间](#virtio结构的配置空间)完成初始化，映射入**AddressSpace**中。 此时**guest**即可通过读写组件的配置空间完成组件的设置
 
 具体的，在实例化时[**virtio_pci_device_plugged()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L2089)为每一个virito结构的配置空间分配了一个单独的MemoryRegion，则**guest**读写组件的配置空间即可触发对应MemoryRegion的回调函数，完成virtio组件的设置
 ```c
