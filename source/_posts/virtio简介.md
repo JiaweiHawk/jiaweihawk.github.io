@@ -1853,7 +1853,643 @@ static void virtio_pci_common_write(void *opaque, hwaddr addr,
 }
 ```
 
-## ~~数据处理~~
+## 数据处理
+
+实际上数据处理包括数据传输和通知两部分，数据传输是通过内存共享实现的，而通知是通过内核的[eventfd机制](https://juejin.cn/post/6989608237226000391)实现的
+
+### 数据传输
+
+由于**guest**物理地址空间位于qemu的进程地址空间中，因此qemu天然就可以访问**guest**的任意物理地址。
+因此，只要知道**guest**中为**virtqueue**分配的物理地址空间，**virtio设备**即可找到这些空间在**qemu**进程空间中的**hva**，即可完成访问，这是在[**virtio_queue_set_rings()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio.c#L2178)中完成的
+
+具体的，根据前面[virtio组件](#virtio组件)小节可知，当**guest**设置**VIRTIO_PCI_COMMON_Q_ENABLE**字段来完成virtqueue的设置时，qemu会调用[**virtio_queue_set_rings()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio.c#L2178)，如下所示
+```c
+void virtio_queue_set_rings(VirtIODevice *vdev, int n, hwaddr desc,
+                            hwaddr avail, hwaddr used)
+{
+    if (!vdev->vq[n].vring.num) {
+        return;
+    }
+    vdev->vq[n].vring.desc = desc;
+    vdev->vq[n].vring.avail = avail;
+    vdev->vq[n].vring.used = used;
+    virtio_init_region_cache(vdev, n);
+}
+
+void virtio_init_region_cache(VirtIODevice *vdev, int n)
+{
+    VirtQueue *vq = &vdev->vq[n];
+    VRingMemoryRegionCaches *old = vq->vring.caches;
+    VRingMemoryRegionCaches *new = NULL;
+    hwaddr addr, size;
+    int64_t len;
+    bool packed;
+
+    ...
+    new = g_new0(VRingMemoryRegionCaches, 1);
+    size = virtio_queue_get_desc_size(vdev, n);
+    packed = virtio_vdev_has_feature(vq->vdev, VIRTIO_F_RING_PACKED) ?
+                                   true : false;
+    len = address_space_cache_init(&new->desc, vdev->dma_as,
+                                   addr, size, packed);
+    if (len < size) {
+        virtio_error(vdev, "Cannot map desc");
+        goto err_desc;
+    }
+
+    size = virtio_queue_get_used_size(vdev, n);
+    len = address_space_cache_init(&new->used, vdev->dma_as,
+                                   vq->vring.used, size, true);
+    if (len < size) {
+        virtio_error(vdev, "Cannot map used");
+        goto err_used;
+    }
+
+    size = virtio_queue_get_avail_size(vdev, n);
+    len = address_space_cache_init(&new->avail, vdev->dma_as,
+                                   vq->vring.avail, size, false);
+    if (len < size) {
+        virtio_error(vdev, "Cannot map avail");
+        goto err_avail;
+    }
+
+    qatomic_rcu_set(&vq->vring.caches, new);
+    if (old) {
+        call_rcu(old, virtio_free_region_cache, rcu);
+    }
+    return;
+    ...
+}
+
+int64_t address_space_cache_init(MemoryRegionCache *cache,
+                                 AddressSpace *as,
+                                 hwaddr addr,
+                                 hwaddr len,
+                                 bool is_write)
+{
+    AddressSpaceDispatch *d;
+    hwaddr l;
+    MemoryRegion *mr;
+    Int128 diff;
+
+    assert(len > 0);
+
+    l = len;
+    cache->fv = address_space_get_flatview(as);
+    d = flatview_to_dispatch(cache->fv);
+    cache->mrs = *address_space_translate_internal(d, addr, &cache->xlat, &l, true);
+
+    /*
+     * cache->xlat is now relative to cache->mrs.mr, not to the section itself.
+     * Take that into account to compute how many bytes are there between
+     * cache->xlat and the end of the section.
+     */
+    diff = int128_sub(cache->mrs.size,
+                      int128_make64(cache->xlat - cache->mrs.offset_within_region));
+    l = int128_get64(int128_min(diff, int128_make64(l)));
+
+    mr = cache->mrs.mr;
+    memory_region_ref(mr);
+    if (memory_access_is_direct(mr, is_write)) {
+        /* We don't care about the memory attributes here as we're only
+         * doing this if we found actual RAM, which behaves the same
+         * regardless of attributes; so UNSPECIFIED is fine.
+         */
+        l = flatview_extend_translation(cache->fv, addr, len, mr,
+                                        cache->xlat, l, is_write,
+                                        MEMTXATTRS_UNSPECIFIED);
+        cache->ptr = qemu_ram_ptr_length(mr->ram_block, cache->xlat, &l, true);
+    } else {
+        cache->ptr = NULL;
+    }
+
+    cache->len = l;
+    cache->is_write = is_write;
+    return l;
+}
+```
+
+根据{% post_link qemu内存模型 %}可知，这里直接将**virtqueue**对应的**gpa**转换为qemu中的**hva**存储在**VRingMemoryRegionCaches**结构中。因此**virito设备**可通过该结构直接访问**virtiqueue**中的数据，而**guest**通过**gpa**直接访问**virtqueue**中的数据，从而实现数据传输
+
+### 通知
+
+通知包括两部分——**guest**通知**virtio设备**(ioeventfd)、**virtio设备**中断**guest**(irqfd)，这两种机制都由内核的**eventfd**机制实现
+
+> eventfd() creates an "eventfd object" that can be used as an
+> event wait/notify mechanism by user-space applications, and by
+> the kernel to notify user-space applications of events.
+
+#### ioeventfd
+
+ioeventfd机制的示意图如下图所示
+![ioeventfd示意图](ioeventfd示意图.png)
+
+根据前面[virtio组件](#virtio组件)小节可知，当**guest**设置**VIRTIO_PCI_COMMON_STATUS**字段来完成virtio设备的设置时，qemu会调用[**virtio_pci_start_ioeventfd()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-pci.c#L373)设置**eventfd**，如下所示
+```c
+//#0  virtio_bus_start_ioeventfd (bus=0x5555580b8df0) at ../../qemu/hw/virtio/virtio-bus.c:220
+//#1  0x0000555555b6f952 in virtio_pci_start_ioeventfd (proxy=0x5555580b0900) at ../../qemu/hw/virtio/virtio-pci.c:375
+//#2  0x0000555555b72cae in virtio_pci_common_write (opaque=0x5555580b0900, addr=20, val=15, size=1) at ../../qemu/hw/virtio/virtio-pci.c:1732
+//#3  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555580b1440, addr=20, value=0x7ffff65ff5d8, size=1, shift=0, mask=255, attrs=...) at ../../qemu/system/memory.c:497
+//#4  0x0000555555e19d39 in access_with_adjusted_size (addr=20, value=0x7ffff65ff5d8, size=1, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555580b1440, attrs=...) at ../../qemu/system/memory.c:573
+//#5  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555580b1440, addr=20, data=15, op=MO_8, attrs=...) at ../../qemu/system/memory.c:1521
+//#6  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f89028 "\017", len=1, mr_addr=20, l=0x7ffff65ff6c0, mr=0x5555580b1440) at ../../qemu/system/physmem.c:2713
+//#7  0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee8000c10, addr=30786325577748, attrs=..., ptr=0x7ffff7f89028, len=1, mr_addr=20, l=1, mr=0x5555580b1440) at ../../qemu/system/physmem.c:2743
+//#8  0x0000555555e2b982 in flatview_write (fv=0x7ffee8000c10, addr=30786325577748, attrs=..., buf=0x7ffff7f89028, len=1) at ../../qemu/system/physmem.c:2774
+//#9  0x0000555555e2bdd0 in address_space_write (as=0x55555704dce0 <address_space_memory>, addr=30786325577748, attrs=..., buf=0x7ffff7f89028, len=1) at ../../qemu/system/physmem.c:2894
+//#10 0x0000555555e2be4c in address_space_rw (as=0x55555704dce0 <address_space_memory>, addr=30786325577748, attrs=..., buf=0x7ffff7f89028, len=1, is_write=true) at ../../qemu/system/physmem.c:2904
+//#11 0x0000555555e85e36 in kvm_cpu_exec (cpu=0x5555573b4110) at ../../qemu/accel/kvm/kvm-all.c:2912
+//#12 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573b4110) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#13 0x00005555560b2687 in qemu_thread_start (args=0x5555573bd220) at ../../qemu/util/qemu-thread-posix.c:541
+//#14 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#15 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+static void virtio_pci_start_ioeventfd(VirtIOPCIProxy *proxy)
+{
+    virtio_bus_start_ioeventfd(&proxy->bus);
+}
+
+int virtio_bus_start_ioeventfd(VirtioBusState *bus)
+{
+    VirtioBusClass *k = VIRTIO_BUS_GET_CLASS(bus);
+    DeviceState *proxy = DEVICE(BUS(bus)->parent);
+    VirtIODevice *vdev = virtio_bus_get_device(bus);
+    VirtioDeviceClass *vdc = VIRTIO_DEVICE_GET_CLASS(vdev);
+    int r;
+
+    if (!k->ioeventfd_assign || !k->ioeventfd_enabled(proxy)) {
+        return -ENOSYS;
+    }
+    if (bus->ioeventfd_started) {
+        return 0;
+    }
+
+    /* Only set our notifier if we have ownership.  */
+    if (!bus->ioeventfd_grabbed) {
+        r = vdc->start_ioeventfd(vdev);
+        if (r < 0) {
+            error_report("%s: failed. Fallback to userspace (slower).", __func__);
+            return r;
+        }
+    }
+    bus->ioeventfd_started = true;
+    return 0;
+}
+
+static int virtio_device_start_ioeventfd_impl(VirtIODevice *vdev)
+{
+    VirtioBusState *qbus = VIRTIO_BUS(qdev_get_parent_bus(DEVICE(vdev)));
+    int i, n, r, err;
+
+    /*
+     * Batch all the host notifiers in a single transaction to avoid
+     * quadratic time complexity in address_space_update_ioeventfds().
+     */
+    memory_region_transaction_begin();
+    for (n = 0; n < VIRTIO_QUEUE_MAX; n++) {
+        VirtQueue *vq = &vdev->vq[n];
+        if (!virtio_queue_get_num(vdev, n)) {
+            continue;
+        }
+        r = virtio_bus_set_host_notifier(qbus, n, true);
+        if (r < 0) {
+            err = r;
+            goto assign_error;
+        }
+        event_notifier_set_handler(&vq->host_notifier,
+                                   virtio_queue_host_notifier_read);
+    }
+    ...
+    memory_region_transaction_commit();
+    return 0;
+    ...
+}
+```
+
+其可划分两部分——[**virtio_bus_set_host_notifier()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-bus.c#L276)向kvm注册eventfd、[**event_notifier_set_handler()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/main-loop.c#L648)注册等待线程
+
+```c
+//#0  memory_region_add_eventfd (mr=0x55555820ae80, addr=0, size=0, match_data=false, data=0, e=0x55555821cbb4) at ../../qemu/system/memory.c:2565
+//#1  0x0000555555b6f81c in virtio_pci_ioeventfd_assign (d=0x555558209fe0, notifier=0x55555821cbb4, n=0, assign=true) at ../../qemu/hw/virtio/virtio-pci.c:345
+//#2  0x0000555555b6df98 in virtio_bus_set_host_notifier (bus=0x555558212450, n=0, assign=true) at ../../qemu/hw/virtio/virtio-bus.c:296
+//#3  0x0000555555def47c in virtio_device_start_ioeventfd_impl (vdev=0x5555582124d0) at ../../qemu/hw/virtio/virtio.c:3833
+//#4  0x0000555555b6dd54 in virtio_bus_start_ioeventfd (bus=0x555558212450) at ../../qemu/hw/virtio/virtio-bus.c:236
+//#5  0x0000555555b6f952 in virtio_pci_start_ioeventfd (proxy=0x555558209fe0) at ../../qemu/hw/virtio/virtio-pci.c:375
+//#6  0x0000555555b72cae in virtio_pci_common_write (opaque=0x555558209fe0, addr=20, val=15, size=1) at ../../qemu/hw/virtio/virtio-pci.c:1732
+//#7  0x0000555555e19a00 in memory_region_write_accessor (mr=0x55555820ab20, addr=20, value=0x7ffff65ff5d8, size=1, shift=0, mask=255, attrs=...) at ../../qemu/system/memory.c:497
+//#8  0x0000555555e19d39 in access_with_adjusted_size (addr=20, value=0x7ffff65ff5d8, size=1, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x55555820ab20, attrs=...) at ../../qemu/system/memory.c:573
+//#9  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x55555820ab20, addr=20, data=15, op=MO_8, attrs=...) at ../../qemu/system/memory.c:1521
+//#10 0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f89028 "\017", len=1, mr_addr=20, l=0x7ffff65ff6c0, mr=0x55555820ab20) at ../../qemu/system/physmem.c:2713
+//#11 0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee8000c10, addr=30786325594132, attrs=..., ptr=0x7ffff7f89028, len=1, mr_addr=20, l=1, mr=0x55555820ab20) at ../../qemu/system/physmem.c:2743
+//#12 0x0000555555e2b982 in flatview_write (fv=0x7ffee8000c10, addr=30786325594132, attrs=..., buf=0x7ffff7f89028, len=1) at ../../qemu/system/physmem.c:2774
+//#13 0x0000555555e2bdd0 in address_space_write (as=0x55555704dce0 <address_space_memory>, addr=30786325594132, attrs=..., buf=0x7ffff7f89028, len=1) at ../../qemu/system/physmem.c:2894
+//#14 0x0000555555e2be4c in address_space_rw (as=0x55555704dce0 <address_space_memory>, addr=30786325594132, attrs=..., buf=0x7ffff7f89028, len=1, is_write=true) at ../../qemu/system/physmem.c:2904
+//#15 0x0000555555e85e36 in kvm_cpu_exec (cpu=0x5555573b4110) at ../../qemu/accel/kvm/kvm-all.c:2912
+//#16 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573b4110) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#17 0x00005555560b2687 in qemu_thread_start (args=0x5555573bd220) at ../../qemu/util/qemu-thread-posix.c:541
+//#18 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#19 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+int virtio_bus_set_host_notifier(VirtioBusState *bus, int n, bool assign)
+{
+    VirtIODevice *vdev = virtio_bus_get_device(bus);
+    VirtioBusClass *k = VIRTIO_BUS_GET_CLASS(bus);
+    DeviceState *proxy = DEVICE(BUS(bus)->parent);
+    VirtQueue *vq = virtio_get_queue(vdev, n);
+    EventNotifier *notifier = virtio_queue_get_host_notifier(vq);
+
+    ...
+    r = event_notifier_init(notifier, 1);
+    if (r < 0) {
+        error_report("%s: unable to init event notifier: %s (%d)",
+                     __func__, strerror(-r), r);
+        return r;
+    }
+    r = k->ioeventfd_assign(proxy, notifier, n, true);
+    ...
+    return r;
+}
+
+int event_notifier_init(EventNotifier *e, int active)
+{
+    int fds[2];
+    int ret;
+
+    ret = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    ...
+    e->rfd = e->wfd = ret;
+    e->initialized = true;
+    event_notifier_set(e);
+    return 0;
+}
+
+int event_notifier_set(EventNotifier *e)
+{
+    static const uint64_t value = 1;
+    ssize_t ret;
+
+    ...
+    do {
+        ret = write(e->wfd, &value, sizeof(value));
+    } while (ret < 0 && errno == EINTR);
+    ...
+    return 0;
+}
+
+static int virtio_pci_ioeventfd_assign(DeviceState *d, EventNotifier *notifier,
+                                       int n, bool assign)
+{
+    VirtIOPCIProxy *proxy = to_virtio_pci_proxy(d);
+    VirtIODevice *vdev = virtio_bus_get_device(&proxy->bus);
+    VirtQueue *vq = virtio_get_queue(vdev, n);
+    bool modern = virtio_pci_modern(proxy);
+    MemoryRegion *modern_mr = &proxy->notify.mr;
+    hwaddr modern_addr = virtio_pci_queue_mem_mult(proxy) *
+                         virtio_get_queue_index(vq);
+    hwaddr legacy_addr = VIRTIO_PCI_QUEUE_NOTIFY;
+    ...
+    memory_region_add_eventfd(modern_mr, modern_addr, 0,
+                              false, n, notifier);
+    ...
+    return 0;
+}
+
+void memory_region_add_eventfd(MemoryRegion *mr,
+                               hwaddr addr,
+                               unsigned size,
+                               bool match_data,
+                               uint64_t data,
+                               EventNotifier *e)
+{
+    MemoryRegionIoeventfd mrfd = {
+        .addr.start = int128_make64(addr),
+        .addr.size = int128_make64(size),
+        .match_data = match_data,
+        .data = data,
+        .e = e,
+    };
+    unsigned i;
+
+    if (size) {
+        adjust_endianness(mr, &mrfd.data, size_memop(size) | MO_TE);
+    }
+    memory_region_transaction_begin();
+    for (i = 0; i < mr->ioeventfd_nb; ++i) {
+        if (memory_region_ioeventfd_before(&mrfd, &mr->ioeventfds[i])) {
+            break;
+        }
+    }
+    ++mr->ioeventfd_nb;
+    mr->ioeventfds = g_realloc(mr->ioeventfds,
+                                  sizeof(*mr->ioeventfds) * mr->ioeventfd_nb);
+    memmove(&mr->ioeventfds[i+1], &mr->ioeventfds[i],
+            sizeof(*mr->ioeventfds) * (mr->ioeventfd_nb-1 - i));
+    mr->ioeventfds[i] = mrfd;
+    ioeventfd_update_pending |= mr->enabled;
+    memory_region_transaction_commit();
+}
+
+//#0  kvm_set_ioeventfd_mmio (fd=28, addr=481036349440, val=0, assign=true, size=0, datamatch=false) at ../../qemu/accel/kvm/kvm-all.c:1187
+//#1  0x0000555555e8764a in kvm_mem_ioeventfd_add (listener=0x555557101240, section=0x7ffff65ff290, match_data=false, data=0, e=0x5555580d4334) at ../../qemu/accel/kvm/kvm-all.c:1655
+//#2  0x0000555555e1f689 in address_space_add_del_ioeventfds (as=0x555557055ee0 <address_space_memory>, fds_new=0x7ffee0417450, fds_new_nb=5, fds_old=0x7ffee00533a0, fds_old_nb=2) at ../../qemu/system/memory.c:818
+//#3  0x0000555555e1fa13 in address_space_update_ioeventfds (as=0x555557055ee0 <address_space_memory>) at ../../qemu/system/memory.c:883
+//#4  0x0000555555e208e4 in memory_region_transaction_commit () at ../../qemu/system/memory.c:1140
+//#5  0x0000555555df3d83 in virtio_device_start_ioeventfd_impl (vdev=0x5555580c6260) at ../../qemu/hw/virtio/virtio.c:3850
+//#6  0x0000555555b70194 in virtio_bus_start_ioeventfd (bus=0x5555580c61e0) at ../../qemu/hw/virtio/virtio-bus.c:236
+//#7  0x0000555555b71d92 in virtio_pci_start_ioeventfd (proxy=0x5555580bdd70) at ../../qemu/hw/virtio/virtio-pci.c:375
+//#8  0x0000555555b750ee in virtio_pci_common_write (opaque=0x5555580bdd70, addr=20, val=15, size=1) at ../../qemu/hw/virtio/virtio-pci.c:1732
+//#9  0x0000555555e1e25a in memory_region_write_accessor (mr=0x5555580be8b0, addr=20, value=0x7ffff65ff5d8, size=1, shift=0, mask=255, attrs=...) at ../../qemu/system/memory.c:497
+//#10 0x0000555555e1e593 in access_with_adjusted_size (addr=20, value=0x7ffff65ff5d8, size=1, access_size_min=1, access_size_max=4, access_fn=0x555555e1e160 <memory_region_write_accessor>, mr=0x5555580be8b0, attrs=...) at ../../qemu/system/memory.c:573
+//#11 0x0000555555e218ad in memory_region_dispatch_write (mr=0x5555580be8b0, addr=20, data=15, op=MO_8, attrs=...) at ../../qemu/system/memory.c:1521
+//#12 0x0000555555e2fffa in flatview_write_continue_step (attrs=..., buf=0x7ffff7f89028 "\017", len=1, mr_addr=20, l=0x7ffff65ff6c0, mr=0x5555580be8b0) at ../../qemu/system/physmem.c:2713
+//#13 0x0000555555e300ca in flatview_write_continue (fv=0x7ffee80eb500, addr=481036337172, attrs=..., ptr=0x7ffff7f89028, len=1, mr_addr=20, l=1, mr=0x5555580be8b0) at ../../qemu/system/physmem.c:2743
+//#14 0x0000555555e301dc in flatview_write (fv=0x7ffee80eb500, addr=481036337172, attrs=..., buf=0x7ffff7f89028, len=1) at ../../qemu/system/physmem.c:2774
+//#15 0x0000555555e3062a in address_space_write (as=0x555557055ee0 <address_space_memory>, addr=481036337172, attrs=..., buf=0x7ffff7f89028, len=1) at ../../qemu/system/physmem.c:2894
+//#16 0x0000555555e306a6 in address_space_rw (as=0x555557055ee0 <address_space_memory>, addr=481036337172, attrs=..., buf=0x7ffff7f89028, len=1, is_write=true) at ../../qemu/system/physmem.c:2904
+//#17 0x0000555555e8a690 in kvm_cpu_exec (cpu=0x5555573bc6a0) at ../../qemu/accel/kvm/kvm-all.c:2912
+//#18 0x0000555555e8d712 in kvm_vcpu_thread_fn (arg=0x5555573bc6a0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#19 0x00005555560b6f08 in qemu_thread_start (args=0x5555573c5850) at ../../qemu/util/qemu-thread-posix.c:541
+//#20 0x00007ffff7694ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#21 0x00007ffff7726850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+static void address_space_update_ioeventfds(AddressSpace *as)
+{
+    FlatView *view;
+    FlatRange *fr;
+    unsigned ioeventfd_nb = 0;
+    unsigned ioeventfd_max;
+    MemoryRegionIoeventfd *ioeventfds;
+    AddrRange tmp;
+    unsigned i;
+
+    if (!as->ioeventfd_notifiers) {
+        return;
+    }
+
+    /*
+     * It is likely that the number of ioeventfds hasn't changed much, so use
+     * the previous size as the starting value, with some headroom to avoid
+     * gratuitous reallocations.
+     */
+    ioeventfd_max = QEMU_ALIGN_UP(as->ioeventfd_nb, 4);
+    ioeventfds = g_new(MemoryRegionIoeventfd, ioeventfd_max);
+
+    view = address_space_get_flatview(as);
+    FOR_EACH_FLAT_RANGE(fr, view) {
+        for (i = 0; i < fr->mr->ioeventfd_nb; ++i) {
+            tmp = addrrange_shift(fr->mr->ioeventfds[i].addr,
+                                  int128_sub(fr->addr.start,
+                                             int128_make64(fr->offset_in_region)));
+            if (addrrange_intersects(fr->addr, tmp)) {
+                ++ioeventfd_nb;
+                if (ioeventfd_nb > ioeventfd_max) {
+                    ioeventfd_max = MAX(ioeventfd_max * 2, 4);
+                    ioeventfds = g_realloc(ioeventfds,
+                            ioeventfd_max * sizeof(*ioeventfds));
+                }
+                ioeventfds[ioeventfd_nb-1] = fr->mr->ioeventfds[i];
+                ioeventfds[ioeventfd_nb-1].addr = tmp;
+            }
+        }
+    }
+
+    address_space_add_del_ioeventfds(as, ioeventfds, ioeventfd_nb,
+                                     as->ioeventfds, as->ioeventfd_nb);
+
+    g_free(as->ioeventfds);
+    as->ioeventfds = ioeventfds;
+    as->ioeventfd_nb = ioeventfd_nb;
+    flatview_unref(view);
+}
+
+static void address_space_add_del_ioeventfds(AddressSpace *as,
+                                             MemoryRegionIoeventfd *fds_new,
+                                             unsigned fds_new_nb,
+                                             MemoryRegionIoeventfd *fds_old,
+                                             unsigned fds_old_nb)
+{
+    unsigned iold, inew;
+    MemoryRegionIoeventfd *fd;
+    MemoryRegionSection section;
+
+    /* Generate a symmetric difference of the old and new fd sets, adding
+     * and deleting as necessary.
+     */
+
+    iold = inew = 0;
+    while (iold < fds_old_nb || inew < fds_new_nb) {
+        if (iold < fds_old_nb
+            && (inew == fds_new_nb
+                || memory_region_ioeventfd_before(&fds_old[iold],
+                                                  &fds_new[inew]))) {
+            fd = &fds_old[iold];
+            section = (MemoryRegionSection) {
+                .fv = address_space_to_flatview(as),
+                .offset_within_address_space = int128_get64(fd->addr.start),
+                .size = fd->addr.size,
+            };
+            MEMORY_LISTENER_CALL(as, eventfd_del, Forward, &section,
+                                 fd->match_data, fd->data, fd->e);
+            ++iold;
+        } else if (inew < fds_new_nb
+                   && (iold == fds_old_nb
+                       || memory_region_ioeventfd_before(&fds_new[inew],
+                                                         &fds_old[iold]))) {
+            fd = &fds_new[inew];
+            section = (MemoryRegionSection) {
+                .fv = address_space_to_flatview(as),
+                .offset_within_address_space = int128_get64(fd->addr.start),
+                .size = fd->addr.size,
+            };
+            MEMORY_LISTENER_CALL(as, eventfd_add, Reverse, &section,
+                                 fd->match_data, fd->data, fd->e);
+            ++inew;
+        } else {
+            ++iold;
+            ++inew;
+        }
+    }
+}
+
+static void kvm_mem_ioeventfd_add(MemoryListener *listener,
+                                  MemoryRegionSection *section,
+                                  bool match_data, uint64_t data,
+                                  EventNotifier *e)
+{
+    int fd = event_notifier_get_fd(e);
+    int r;
+
+    r = kvm_set_ioeventfd_mmio(fd, section->offset_within_address_space,
+                               data, true, int128_get64(section->size),
+                               match_data);
+    ...
+}
+
+int event_notifier_get_fd(const EventNotifier *e)
+{
+    return e->rfd;
+}
+
+static int kvm_set_ioeventfd_mmio(int fd, hwaddr addr, uint32_t val,
+                                  bool assign, uint32_t size, bool datamatch)
+{
+    int ret;
+    struct kvm_ioeventfd iofd = {
+        .datamatch = datamatch ? adjust_ioeventfd_endianness(val, size) : 0,
+        .addr = addr,
+        .len = size,
+        .flags = 0,
+        .fd = fd,
+    };
+    ...
+    ret = kvm_vm_ioctl(kvm_state, KVM_IOEVENTFD, &iofd);
+    ...
+}
+```
+
+简单来说，其在[**event_notifier_init()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/event_notifier-posix.c#L35)中调用**eventfd**系统调用并获取对应的文件描述符，然后在[**kvm_mem_ioeventfd_add()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/accel/kvm/kvm-all.c#L1647)中将该文件描述符通过**ioctl**传递给**kvm内核模块**，后续**kvm内核模块**可以唤醒被阻塞的用于轮询的**virtio设备**的任务，完成**guest**通知**virtio设备**
+
+下面分析一下**virtio设备**如何将**eventfd**的文件描述符绑定到等待线程任务上的，其相关代码如下所示
+```c
+//#0  aio_set_event_notifier (ctx=0x5555570ea810, notifier=0x5555580ca6e4, io_read=0x555555deed70 <virtio_queue_host_notifier_read>, io_poll=0x0, io_poll_ready=0x0) at ../../qemu/util/aio-posix.c:201
+//#1  0x00005555560ce889 in event_notifier_set_handler (e=0x5555580ca6e4, handler=0x555555deed70 <virtio_queue_host_notifier_read>) at ../../qemu/util/main-loop.c:652
+//#2  0x0000555555def4b1 in virtio_device_start_ioeventfd_impl (vdev=0x5555580b8df0) at ../../qemu/hw/virtio/virtio.c:3838
+//#3  0x0000555555b6dd54 in virtio_bus_start_ioeventfd (bus=0x5555580b8d70) at ../../qemu/hw/virtio/virtio-bus.c:236
+//#4  0x0000555555b6f952 in virtio_pci_start_ioeventfd (proxy=0x5555580b0900) at ../../qemu/hw/virtio/virtio-pci.c:375
+//#5  0x0000555555b72cae in virtio_pci_common_write (opaque=0x5555580b0900, addr=20, val=15, size=1) at ../../qemu/hw/virtio/virtio-pci.c:1732
+//#6  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555580b1440, addr=20, value=0x7ffff5bff5d8, size=1, shift=0, mask=255, attrs=...) at ../../qemu/system/memory.c:497
+//#7  0x0000555555e19d39 in access_with_adjusted_size (addr=20, value=0x7ffff5bff5d8, size=1, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555580b1440, attrs=...) at ../../qemu/system/memory.c:573
+//#8  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555580b1440, addr=20, data=15, op=MO_8, attrs=...) at ../../qemu/system/memory.c:1521
+//#9  0x0000555555e2b7a0 in flatview_write_continue_step (attrs=..., buf=0x7ffff7f86028 "\017\020", len=1, mr_addr=20, l=0x7ffff5bff6c0, mr=0x5555580b1440) at ../../qemu/system/physmem.c:2713
+//#10 0x0000555555e2b870 in flatview_write_continue (fv=0x7ffee0040190, addr=30786325577748, attrs=..., ptr=0x7ffff7f86028, len=1, mr_addr=20, l=1, mr=0x5555580b1440) at ../../qemu/system/physmem.c:2743
+//#11 0x0000555555e2b982 in flatview_write (fv=0x7ffee0040190, addr=30786325577748, attrs=..., buf=0x7ffff7f86028, len=1) at ../../qemu/system/physmem.c:2774
+//#12 0x0000555555e2bdd0 in address_space_write (as=0x55555704dce0 <address_space_memory>, addr=30786325577748, attrs=..., buf=0x7ffff7f86028, len=1) at ../../qemu/system/physmem.c:2894
+//#13 0x0000555555e2be4c in address_space_rw (as=0x55555704dce0 <address_space_memory>, addr=30786325577748, attrs=..., buf=0x7ffff7f86028, len=1, is_write=true) at ../../qemu/system/physmem.c:2904
+//#14 0x0000555555e85e36 in kvm_cpu_exec (cpu=0x5555573e72d0) at ../../qemu/accel/kvm/kvm-all.c:2912
+//#15 0x0000555555e88eb8 in kvm_vcpu_thread_fn (arg=0x5555573e72d0) at ../../qemu/accel/kvm/kvm-accel-ops.c:50
+//#16 0x00005555560b2687 in qemu_thread_start (args=0x5555573f04a0) at ../../qemu/util/qemu-thread-posix.c:541
+//#17 0x00007ffff7894ac3 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:442
+//#18 0x00007ffff7926850 in clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:81
+void event_notifier_set_handler(EventNotifier *e,
+                                EventNotifierHandler *handler)
+{
+    iohandler_init();
+    aio_set_event_notifier(iohandler_ctx, e, handler, NULL, NULL);
+}
+
+void aio_set_event_notifier(AioContext *ctx,
+                            EventNotifier *notifier,
+                            EventNotifierHandler *io_read,
+                            AioPollFn *io_poll,
+                            EventNotifierHandler *io_poll_ready)
+{
+    aio_set_fd_handler(ctx, event_notifier_get_fd(notifier),
+                       (IOHandler *)io_read, NULL, io_poll,
+                       (IOHandler *)io_poll_ready, notifier);
+}
+```
+
+可以看到，其在[**event_notifier_set_handler**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/util/main-loop.c#L648)中将**eventfd**的文件描述符绑定到**io-handler**任务上，并注册[**virtio_queue_host_notifier_read()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio.c#L3667)为对应的**read**回调函数，即当**kvm内核模块**唤醒等待线程时，**qemu**会执行如下的回调函数
+```c
+//#0  virtio_net_handle_tx_bh (vdev=0x5555580b8df0, vq=0x5555580ca708) at ../../qemu/hw/net/virtio-net.c:2865
+//#1  0x0000555555deb477 in virtio_queue_notify_vq (vq=0x5555580ca708) at ../../qemu/hw/virtio/virtio.c:2268
+//#2  0x0000555555deedb0 in virtio_queue_host_notifier_read (n=0x5555580ca77c) at ../../qemu/hw/virtio/virtio.c:3671
+//#3  0x00005555560acf67 in aio_dispatch_handler (ctx=0x5555570ea810, node=0x7ffee0c08b20) at ../../qemu/util/aio-posix.c:372
+//#4  0x00005555560ad116 in aio_dispatch_handlers (ctx=0x5555570ea810) at ../../qemu/util/aio-posix.c:414
+//#5  0x00005555560ad176 in aio_dispatch (ctx=0x5555570ea810) at ../../qemu/util/aio-posix.c:424
+//#6  0x00005555560cce95 in aio_ctx_dispatch (source=0x5555570ea810, callback=0x0, user_data=0x0) at ../../qemu/util/async.c:360
+//#7  0x00007ffff7b86d3b in g_main_context_dispatch () at /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#8  0x00005555560ce520 in glib_pollfds_poll () at ../../qemu/util/main-loop.c:287
+//#9  0x00005555560ce5ab in os_host_main_loop_wait (timeout=79205277539000) at ../../qemu/util/main-loop.c:310
+//#10 0x00005555560ce6d7 in main_loop_wait (nonblocking=0) at ../../qemu/util/main-loop.c:589
+//#11 0x0000555555bd4e54 in qemu_main_loop () at ../../qemu/system/runstate.c:783
+//#12 0x0000555555e96f5b in qemu_default_main () at ../../qemu/system/main.c:37
+//#13 0x0000555555e96f9c in main (argc=39, argv=0x7fffffffd9e8) at ../../qemu/system/main.c:48
+//#14 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=39, argv=argv@entry=0x7fffffffd9e8) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#15 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=39, argv=0x7fffffffd9e8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd9d8) at ../csu/libc-start.c:392
+//#16 0x000055555586cc95 in _start ()
+void virtio_queue_host_notifier_read(EventNotifier *n)
+{
+    VirtQueue *vq = container_of(n, VirtQueue, host_notifier);
+    if (event_notifier_test_and_clear(n)) {
+        virtio_queue_notify_vq(vq);
+    }
+}
+
+int event_notifier_test_and_clear(EventNotifier *e)
+{
+    int value;
+    ssize_t len;
+    char buffer[512];
+
+    if (!e->initialized) {
+        return 0;
+    }
+
+    /* Drain the notify pipe.  For eventfd, only 8 bytes will be read.  */
+    value = 0;
+    do {
+        len = read(e->rfd, buffer, sizeof(buffer));
+        value |= (len > 0);
+    } while ((len == -1 && errno == EINTR) || len == sizeof(buffer));
+
+    return value;
+}
+
+static void virtio_queue_notify_vq(VirtQueue *vq)
+{
+    if (vq->vring.desc && vq->handle_output) {
+        VirtIODevice *vdev = vq->vdev;
+
+        if (unlikely(vdev->broken)) {
+            return;
+        }
+
+        trace_virtio_queue_notify(vdev, vq - vdev->vq, vq);
+        vq->handle_output(vdev, vq);
+
+        if (unlikely(vdev->start_on_kick)) {
+            virtio_set_started(vdev, true);
+        }
+    }
+}
+
+static void virtio_net_handle_tx_bh(VirtIODevice *vdev, VirtQueue *vq)
+{
+    VirtIONet *n = VIRTIO_NET(vdev);
+    VirtIONetQueue *q = &n->vqs[vq2q(virtio_get_queue_index(vq))];
+    ...
+    virtio_queue_set_notification(vq, 0);
+    qemu_bh_schedule(q->tx_bh);
+}
+
+//#0  virtio_net_tx_bh (opaque=0x5555580f06e0) at ../../qemu/hw/net/virtio-net.c:2941
+//#1  0x00005555560cc8d9 in aio_bh_call (bh=0x5555580c4380) at ../../qemu/util/async.c:171
+//#2  0x00005555560cca00 in aio_bh_poll (ctx=0x5555570f0bf0) at ../../qemu/util/async.c:218
+//#3  0x00005555560ad16a in aio_dispatch (ctx=0x5555570f0bf0) at ../../qemu/util/aio-posix.c:423
+//#4  0x00005555560cce95 in aio_ctx_dispatch (source=0x5555570f0bf0, callback=0x0, user_data=0x0) at ../../qemu/util/async.c:360
+//#5  0x00007ffff7b86d3b in g_main_context_dispatch () at /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#6  0x00005555560ce520 in glib_pollfds_poll () at ../../qemu/util/main-loop.c:287
+//#7  0x00005555560ce5ab in os_host_main_loop_wait (timeout=0) at ../../qemu/util/main-loop.c:310
+//#8  0x00005555560ce6d7 in main_loop_wait (nonblocking=0) at ../../qemu/util/main-loop.c:589
+//#9  0x0000555555bd4e54 in qemu_main_loop () at ../../qemu/system/runstate.c:783
+//#10 0x0000555555e96f5b in qemu_default_main () at ../../qemu/system/main.c:37
+//#11 0x0000555555e96f9c in main (argc=39, argv=0x7fffffffd9e8) at ../../qemu/system/main.c:48
+//#12 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=39, argv=argv@entry=0x7fffffffd9e8) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#13 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=39, argv=0x7fffffffd9e8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd9d8) at ../csu/libc-start.c:392
+//#14 0x000055555586cc95 in _start ()
+static void virtio_net_tx_bh(void *opaque)
+{
+    ...
+    ret = virtio_net_flush_tx(q);
+    if (ret == -EBUSY || ret == -EINVAL) {
+        return; /* Notification re-enable handled by tx_complete or device
+                 * broken */
+    }
+    ...
+}
+```
+在前面[实例化](#实例化)中，其**handle_output**字段在[**virtio_net_add_queue()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2988)中注册为[**virtio_net_handle_tx_bh()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2863)，并将对应的**bottom half**设置为[**virtio_net_tx_timer()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2889)
+
+所以当**kvm内核模块**唤醒等待线程时，[**virtio_queue_host_notifier_read()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio.c#L3667)被回调，并在[**virtio_net_handle_tx_bh()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2863)中唤醒对应的**bottom half**任务，执行[**virtio_net_tx_timer()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2889)最终处理**virtqueue**中传递的数据
+
+#### ~~irqfd~~
 
 # ~~virtio驱动~~
 
@@ -1867,3 +2503,6 @@ static void virtio_pci_common_write(void *opaque, hwaddr addr,
 6. [【原创】Linux虚拟化KVM-Qemu分析（十一）之virtqueue](https://www.cnblogs.com/LoyenWang/p/14589296.html)
 7. [Virtio协议概述](https://www.openeuler.org/zh/blog/yorifang/virtio-spec-overview.html)
 8. [VirtIO实现原理——PCI基础](https://blog.csdn.net/huang987246510/article/details/103379926)
+9. [qemu-kvm的ioeventfd机制](https://www.cnblogs.com/haiyonghao/p/14440743.html)
+10. [qemu-kvm的irqfd机制](https://www.cnblogs.com/haiyonghao/p/14440723.html)
+11. [深入分析Linux虚拟化KVM-Qemu之ioeventfd与irqfd](https://www.bilibili.com/read/cv22112391/)
