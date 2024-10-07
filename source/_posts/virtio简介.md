@@ -1971,15 +1971,19 @@ int64_t address_space_cache_init(MemoryRegionCache *cache,
 
 根据{% post_link qemu内存模型 %}可知，这里直接将**virtqueue**对应的**gpa**转换为qemu中的**hva**存储在**VRingMemoryRegionCaches**结构中。因此**virito设备**可通过该结构直接访问**virtiqueue**中的数据，而**guest**通过**gpa**直接访问**virtqueue**中的数据，从而实现数据传输
 
-### 通知
+### 数据通知
 
-通知包括两部分——**guest**通知**virtio设备**(ioeventfd)、**virtio设备**中断**guest**(irqfd)，这两种机制都由内核的**eventfd**机制实现
+通知包括两部分——**guest**通知**virtio设备**(ioeventfd)、**virtio设备**中断**guest**(ioctl)。
+
+其中前半部分是由内核的**eventfd**机制实现
 
 > eventfd() creates an "eventfd object" that can be used as an
 > event wait/notify mechanism by user-space applications, and by
 > the kernel to notify user-space applications of events.
 
-#### ioeventfd
+而后半部分则是由硬件提供的机制实现的，即cpu提供了向**guest**注入中断的接口，则**virtio设备**通过ioctl调用该接口即可
+
+#### 通知设备
 
 ioeventfd机制的示意图如下图所示
 ![ioeventfd示意图](ioeventfd示意图.png)
@@ -2489,7 +2493,105 @@ static void virtio_net_tx_bh(void *opaque)
 
 所以当**kvm内核模块**唤醒等待线程时，[**virtio_queue_host_notifier_read()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio.c#L3667)被回调，并在[**virtio_net_handle_tx_bh()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2863)中唤醒对应的**bottom half**任务，执行[**virtio_net_tx_timer()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2889)最终处理**virtqueue**中传递的数据
 
-#### ~~irqfd~~
+#### 通知guest
+
+根据前面[virtio标准](#可用buffer通知)小节可知，一般是Qemu注入对应的MSIx中断来通知**guest**，msix中断通知的示意图如下所示
+![msix中断示意图](msi中断示意图.png)
+
+由于**msix中断**涉及中断虚拟化等多方面的内容，这里不详细分析，只简单介绍一下。
+
+**msix中断**是**pci协议**为了绕过较慢的**ioapic**中断处理器直接将设备中断发送到处理速度更快的**lapic**中断处理器的机制。具体来说，**pci设备**根据PCI设置空间的**msix table**中指定的地址(即**lapic**映射到的地址空间)中写入数据，从而触发**lapic**中断。
+
+而qemu模拟了该操作，其**msix table**中指定的地址空间属于**apic设备**，该地址的写由对应**MemoryRegion**的回调函数[**kvm_apic_mem_write()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/i386/kvm/apic.c#L206)处理
+```C
+//#0  kvm_irqchip_send_msi (s=0x5555570f9160, msg=...) at ../../qemu/accel/kvm/kvm-all.c:1951
+//#1  0x0000555555ce262c in kvm_send_msi (msg=0x7fffffff5300) at ../../qemu/hw/i386/kvm/apic.c:193
+//#2  0x0000555555ce26d6 in kvm_apic_mem_write (opaque=0x555557276400, addr=4096, data=36, size=4) at ../../qemu/hw/i386/kvm/apic.c:211
+//#3  0x0000555555e19a00 in memory_region_write_accessor (mr=0x5555572764a0, addr=4096, value=0x7fffffff5428, size=4, shift=0, mask=4294967295, attrs=...) at ../../qemu/system/memory.c:497
+//#4  0x0000555555e19d39 in access_with_adjusted_size (addr=4096, value=0x7fffffff5428, size=4, access_size_min=1, access_size_max=4, access_fn=0x555555e19906 <memory_region_write_accessor>, mr=0x5555572764a0, attrs=...) at ../../qemu/system/memory.c:573
+//#5  0x0000555555e1d053 in memory_region_dispatch_write (mr=0x5555572764a0, addr=4096, data=36, op=MO_32, attrs=...) at ../../qemu/system/memory.c:1521
+//#6  0x0000555555e2d666 in address_space_stl_internal (as=0x5555580b58e0, addr=4276097024, val=36, attrs=..., result=0x0, endian=DEVICE_LITTLE_ENDIAN) at ../../qemu/system/memory_ldst.c.inc:319
+//#7  0x0000555555e2d7c5 in address_space_stl_le (as=0x5555580b58e0, addr=4276097024, val=36, attrs=..., result=0x0) at ../../qemu/system/memory_ldst.c.inc:357
+//#8  0x0000555555a96287 in pci_msi_trigger (dev=0x5555580b56a0, msg=...) at ../../qemu/hw/pci/pci.c:364
+//#9  0x0000555555a92222 in msi_send_message (dev=0x5555580b56a0, msg=...) at ../../qemu/hw/pci/msi.c:380
+//#10 0x0000555555a93f21 in msix_notify (dev=0x5555580b56a0, vector=2) at ../../qemu/hw/pci/msix.c:542
+//#11 0x0000555555b6f142 in virtio_pci_notify (d=0x5555580b56a0, vector=2) at ../../qemu/hw/virtio/virtio-pci.c:77
+//#12 0x0000555555dea808 in virtio_notify_vector (vdev=0x5555580bdb90, vector=2) at ../../qemu/hw/virtio/virtio.c:2001
+//#13 0x0000555555debf63 in virtio_irq (vq=0x5555580e4738) at ../../qemu/hw/virtio/virtio.c:2491
+//#14 0x0000555555dec011 in virtio_notify (vdev=0x5555580bdb90, vq=0x5555580e4738) at ../../qemu/hw/virtio/virtio.c:2503
+//#15 0x0000555555db2d6b in virtio_net_flush_tx (q=0x5555580cb6f0) at ../../qemu/hw/net/virtio-net.c:2822
+//#16 0x0000555555db3271 in virtio_net_tx_bh (opaque=0x5555580cb6f0) at ../../qemu/hw/net/virtio-net.c:2960
+//#17 0x00005555560cc8d9 in aio_bh_call (bh=0x5555580c5390) at ../../qemu/util/async.c:171
+//#18 0x00005555560cca00 in aio_bh_poll (ctx=0x5555570f0bf0) at ../../qemu/util/async.c:218
+//#19 0x00005555560ad16a in aio_dispatch (ctx=0x5555570f0bf0) at ../../qemu/util/aio-posix.c:423
+//#20 0x00005555560cce95 in aio_ctx_dispatch (source=0x5555570f0bf0, callback=0x0, user_data=0x0) at ../../qemu/util/async.c:360
+//#21 0x00007ffff7b88d3b in g_main_context_dispatch () at /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#22 0x00005555560ce520 in glib_pollfds_poll () at ../../qemu/util/main-loop.c:287
+//#23 0x00005555560ce5ab in os_host_main_loop_wait (timeout=0) at ../../qemu/util/main-loop.c:310
+//#24 0x00005555560ce6d7 in main_loop_wait (nonblocking=0) at ../../qemu/util/main-loop.c:589
+//#25 0x0000555555bd4e54 in qemu_main_loop () at ../../qemu/system/runstate.c:783
+//#26 0x0000555555e96f5b in qemu_default_main () at ../../qemu/system/main.c:37
+//#27 0x0000555555e96f9c in main (argc=39, argv=0x7fffffffdac8) at ../../qemu/system/main.c:48
+//#28 0x00007ffff7829d90 in __libc_start_call_main (main=main@entry=0x555555e96f6f <main>, argc=argc@entry=39, argv=argv@entry=0x7fffffffdac8) at ../sysdeps/nptl/libc_start_call_main.h:58
+//#29 0x00007ffff7829e40 in __libc_start_main_impl (main=0x555555e96f6f <main>, argc=39, argv=0x7fffffffdac8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdab8) at ../csu/libc-start.c:392
+//#30 0x000055555586cc95 in _start ()
+static void pci_msi_trigger(PCIDevice *dev, MSIMessage msg)
+{
+    MemTxAttrs attrs = {};
+
+    /*
+     * Xen uses the high bits of the address to contain some of the bits
+     * of the PIRQ#. Therefore we can't just send the write cycle and
+     * trust that it's caught by the APIC at 0xfee00000 because the
+     * target of the write might be e.g. 0x0x1000fee46000 for PIRQ#4166.
+     * So we intercept the delivery here instead of in kvm_send_msi().
+     */
+    if (xen_mode == XEN_EMULATE &&
+        xen_evtchn_deliver_pirq_msi(msg.address, msg.data)) {
+        return;
+    }
+    attrs.requester_id = pci_requester_id(dev);
+    address_space_stl_le(&dev->bus_master_as, msg.address, msg.data,
+                         attrs, NULL);
+}
+
+static void kvm_apic_mem_write(void *opaque, hwaddr addr,
+                               uint64_t data, unsigned size)
+{
+    MSIMessage msg = { .address = addr, .data = data };
+
+    kvm_send_msi(&msg);
+}
+
+static void kvm_send_msi(MSIMessage *msg)
+{
+    int ret;
+
+    /*
+     * The message has already passed through interrupt remapping if enabled,
+     * but the legacy extended destination ID in low bits still needs to be
+     * handled.
+     */
+    msg->address = kvm_swizzle_msi_ext_dest_id(msg->address);
+
+    ret = kvm_irqchip_send_msi(kvm_state, *msg);
+    ...
+}
+
+int kvm_irqchip_send_msi(KVMState *s, MSIMessage msg)
+{
+    struct kvm_msi msi;
+
+    msi.address_lo = (uint32_t)msg.address;
+    msi.address_hi = msg.address >> 32;
+    msi.data = le32_to_cpu(msg.data);
+    msi.flags = 0;
+    memset(msi.pad, 0, sizeof(msi.pad));
+
+    return kvm_vm_ioctl(s, KVM_SIGNAL_MSI, &msi);
+}
+```
+可以看到，最后其通过**ioctl()**，陷入**kvm内核模块**，让**kvm内核模块**根据cpu提供的中断注入接口向**guest**注入中断。
 
 # ~~virtio驱动~~
 
@@ -2506,3 +2608,7 @@ static void virtio_net_tx_bh(void *opaque)
 9. [qemu-kvm的ioeventfd机制](https://www.cnblogs.com/haiyonghao/p/14440743.html)
 10. [qemu-kvm的irqfd机制](https://www.cnblogs.com/haiyonghao/p/14440723.html)
 11. [深入分析Linux虚拟化KVM-Qemu之ioeventfd与irqfd](https://www.bilibili.com/read/cv22112391/)
+12. [中断虚拟化-内核端(一)](https://www.cnblogs.com/haiyonghao/p/14440424.html)
+13. [KVM IO虚拟化](https://blog.csdn.net/home19900111/article/details/128610752)
+14. [Qemu/kernel混合模拟](https://richardweiyang-2.gitbook.io/understanding_qemu/00-advance_interrupt_controller/02-qemu_kernel_emulate)
+15. [深入理解 MSI/MSI-X 中断和中断虚拟化](http://liujunming.top/pdf/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3MSI-X%E4%B8%AD%E6%96%AD%E5%92%8C%E4%B8%AD%E6%96%AD%E8%99%9A%E6%8B%9F%E5%8C%96.pdf)
