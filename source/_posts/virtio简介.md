@@ -2593,7 +2593,382 @@ int kvm_irqchip_send_msi(KVMState *s, MSIMessage msg)
 ```
 可以看到，最后其通过**ioctl()**，陷入**kvm内核模块**，让**kvm内核模块**根据cpu提供的中断注入接口向**guest**注入中断。
 
-# ~~virtio驱动~~
+# virtio驱动
+
+这里主要介绍一下**guest驱动**设置virtio组件和数据处理的逻辑
+
+## virtio设置
+
+**guest驱动**主要的任务是申请资源地址空间，并将对应的资源空间按照前面[virtio transport](#virtio-transport)小节的协议传递给**virtio设备**，即通过读写**PCI设置空间**和**virtio配置空间**将资源gpa传递给**virtio设备**
+
+因为**virtio-net-pci设备**即包含**virtio-pci**的**virtio transport**，也包含**virtio-net**的**virtio设备**，因此其由[**virtio_pci_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_common.c#L555)和[**virtnet_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/net/virtio_net.c#L4624)共同设置，
+
+```c
+//#0  virtio_pci_probe (pci_dev=0xffff888100941000, id=0xffffffff82299f00 <virtio_pci_id_table>) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio_pci_common.c:557
+//#1  0xffffffff816050a2 in local_pci_probe (_ddi=_ddi@entry=0xffffc90000013d40) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:324
+//#2  0xffffffff81605fdd in pci_call_probe (id=<optimized out>, dev=0xffff888100941000, drv=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:392
+//#3  __pci_device_probe (pci_dev=0xffff888100941000, drv=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:417
+//#4  pci_device_probe (dev=0xffff8881009410c0) at /home/hawk/Desktop/mqemu/kernel/drivers/pci/pci-driver.c:451
+//#5  0xffffffff8193dd1c in call_driver_probe (drv=0xffffffff82be1a88 <virtio_pci_driver+104>, dev=0xffff8881009410c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:578
+//#6  really_probe (dev=dev@entry=0xffff8881009410c0, drv=drv@entry=0xffffffff82be1a88 <virtio_pci_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:656
+//#7  0xffffffff8193df8e in __driver_probe_device (drv=drv@entry=0xffffffff82be1a88 <virtio_pci_driver+104>, dev=dev@entry=0xffff8881009410c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:798
+//#8  0xffffffff8193e069 in driver_probe_device (drv=drv@entry=0xffffffff82be1a88 <virtio_pci_driver+104>, dev=dev@entry=0xffff8881009410c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:828
+//#9  0xffffffff8193e2e5 in __driver_attach (data=0xffffffff82be1a88 <virtio_pci_driver+104>, dev=0xffff8881009410c0) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1214
+//#10 __driver_attach (dev=0xffff8881009410c0, data=0xffffffff82be1a88 <virtio_pci_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1154
+//#11 0xffffffff8193bab7 in bus_for_each_dev (bus=<optimized out>, start=start@entry=0x0 <fixed_percpu_data>, data=data@entry=0xffffffff82be1a88 <virtio_pci_driver+104>, fn=fn@entry=0xffffffff8193e260 <__driver_attach>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:368
+//#12 0xffffffff8193d6f9 in driver_attach (drv=drv@entry=0xffffffff82be1a88 <virtio_pci_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1231
+//#13 0xffffffff8193ce97 in bus_add_driver (drv=drv@entry=0xffffffff82be1a88 <virtio_pci_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:673
+//#14 0xffffffff8193f48b in driver_register (drv=0xffffffff82be1a88 <virtio_pci_driver+104>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/driver.c:246
+//#15 0xffffffff81001a63 in do_one_initcall (fn=0xffffffff832dfeb0 <virtio_pci_driver_init>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1238
+//#16 0xffffffff8328d1d7 in do_initcall_level (command_line=0xffff88810033a140 "rdinit", level=6) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1300
+//#17 do_initcalls () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1316
+//#18 do_basic_setup () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1335
+//#19 kernel_init_freeable () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1548
+//#20 0xffffffff81f657a5 in kernel_init (unused=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1437
+//#21 0xffffffff810baddf in ret_from_fork (prev=<optimized out>, regs=0xffffc90000013f58, fn=0xffffffff81f65790 <kernel_init>, fn_arg=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/process.c:147
+//#22 0xffffffff8100244a in ret_from_fork_asm () at /home/hawk/Desktop/mqemu/kernel/arch/x86/entry/entry_64.S:243
+//#23 0x0000000000000000 in ?? ()
+static int virtio_pci_probe(struct pci_dev *pci_dev,
+			    const struct pci_device_id *id)
+{
+    ...
+	rc = virtio_pci_modern_probe(vp_dev);
+    ...
+}
+
+int virtio_pci_modern_probe(struct virtio_pci_device *vp_dev)
+{
+    ...
+	err = vp_modern_probe(mdev);
+    ...
+	vp_dev->vdev.config = &virtio_pci_config_ops;
+	vp_dev->config_vector = vp_config_vector;
+	vp_dev->setup_vq = setup_vq;
+	vp_dev->del_vq = del_vq;
+	vp_dev->is_avq = vp_is_avq;
+	vp_dev->isr = mdev->isr;
+    ...
+	return 0;
+}
+
+int vp_modern_probe(struct virtio_pci_modern_device *mdev)
+{
+    ...
+	/* check for a common config: if not, use legacy mode (bar 0). */
+	common = virtio_pci_find_capability(pci_dev, VIRTIO_PCI_CAP_COMMON_CFG,
+					    IORESOURCE_IO | IORESOURCE_MEM,
+					    &mdev->modern_bars);
+    ...
+	/* If common is there, these should be too... */
+	isr = virtio_pci_find_capability(pci_dev, VIRTIO_PCI_CAP_ISR_CFG,
+					 IORESOURCE_IO | IORESOURCE_MEM,
+					 &mdev->modern_bars);
+	notify = virtio_pci_find_capability(pci_dev, VIRTIO_PCI_CAP_NOTIFY_CFG,
+					    IORESOURCE_IO | IORESOURCE_MEM,
+					    &mdev->modern_bars);
+    ...
+	/* Device capability is only mandatory for devices that have
+	 * device-specific configuration.
+	 */
+	device = virtio_pci_find_capability(pci_dev, VIRTIO_PCI_CAP_DEVICE_CFG,
+					    IORESOURCE_IO | IORESOURCE_MEM,
+					    &mdev->modern_bars);
+
+    ...
+	mdev->common = vp_modern_map_capability(mdev, common,
+			      sizeof(struct virtio_pci_common_cfg), 4, 0,
+			      offsetofend(struct virtio_pci_modern_common_cfg,
+					  admin_queue_num),
+			      &mdev->common_len, NULL);
+    ...
+	mdev->isr = vp_modern_map_capability(mdev, isr, sizeof(u8), 1,
+					     0, 1,
+					     NULL, NULL);
+
+	/* Read notify_off_multiplier from config space. */
+	pci_read_config_dword(pci_dev,
+			      notify + offsetof(struct virtio_pci_notify_cap,
+						notify_off_multiplier),
+			      &mdev->notify_offset_multiplier);
+	/* Read notify length and offset from config space. */
+	pci_read_config_dword(pci_dev,
+			      notify + offsetof(struct virtio_pci_notify_cap,
+						cap.length),
+			      &notify_length);
+
+	pci_read_config_dword(pci_dev,
+			      notify + offsetof(struct virtio_pci_notify_cap,
+						cap.offset),
+			      &notify_offset);
+
+    ...
+	/* We don't know how many VQs we'll map, ahead of the time.
+	 * If notify length is small, map it all now.
+	 * Otherwise, map each VQ individually later.
+	 */
+	if ((u64)notify_length + (notify_offset % PAGE_SIZE) <= PAGE_SIZE) {
+		mdev->notify_base = vp_modern_map_capability(mdev, notify,
+							     2, 2,
+							     0, notify_length,
+							     &mdev->notify_len,
+							     &mdev->notify_pa);
+		if (!mdev->notify_base)
+			goto err_map_notify;
+	} else {
+		mdev->notify_map_cap = notify;
+	}
+
+	/* Again, we don't know how much we should map, but PAGE_SIZE
+	 * is more than enough for all existing devices.
+	 */
+	if (device) {
+		mdev->device = vp_modern_map_capability(mdev, device, 0, 4,
+							0, PAGE_SIZE,
+							&mdev->device_len,
+							NULL);
+		if (!mdev->device)
+			goto err_map_device;
+	}
+
+	return 0;
+}
+```
+根据{% post_link qemu的PCI设备 %}可知，**acpi(Advanced Configuration and Power Interface)**驱动会将**PCI配置空间**设置好，接着这里的[**vp_modern_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern_dev.c#L223)会解析**PCI配置空间**(capability)并解析各个**virtio配置空间**。但此时未进行设置，仅仅注册了[**virtio_pci_config_ops**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern.c#L800)、[**setup_vq()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern.c#L530)和[**vp_config_vector()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern.c#L516)的函数指针，等后续[**virtnet_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/net/virtio_net.c#L4624)继续设置
+
+```c
+//#0  virtnet_probe (vdev=0xffff888100953000) at /home/hawk/Desktop/mqemu/kernel/drivers/net/virtio_net.c:4625
+//#1  0xffffffff81692f5e in virtio_dev_probe (_d=0xffff888100953010) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio.c:311
+//#2  0xffffffff8193dd1c in call_driver_probe (drv=0xffffffff82c0ffa0 <virtio_net_driver>, dev=0xffff888100953010) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:578
+//#3  really_probe (dev=dev@entry=0xffff888100953010, drv=drv@entry=0xffffffff82c0ffa0 <virtio_net_driver>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:656
+//#4  0xffffffff8193df8e in __driver_probe_device (drv=drv@entry=0xffffffff82c0ffa0 <virtio_net_driver>, dev=dev@entry=0xffff888100953010) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:798
+//#5  0xffffffff8193e069 in driver_probe_device (drv=drv@entry=0xffffffff82c0ffa0 <virtio_net_driver>, dev=dev@entry=0xffff888100953010) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:828
+//#6  0xffffffff8193e2e5 in __driver_attach (data=0xffffffff82c0ffa0 <virtio_net_driver>, dev=0xffff888100953010) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1214
+//#7  __driver_attach (dev=0xffff888100953010, data=0xffffffff82c0ffa0 <virtio_net_driver>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1154
+//#8  0xffffffff8193bab7 in bus_for_each_dev (bus=<optimized out>, start=start@entry=0x0 <fixed_percpu_data>, data=data@entry=0xffffffff82c0ffa0 <virtio_net_driver>, fn=fn@entry=0xffffffff8193e260 <__driver_attach>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:368
+//#9  0xffffffff8193d6f9 in driver_attach (drv=drv@entry=0xffffffff82c0ffa0 <virtio_net_driver>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/dd.c:1231
+//#10 0xffffffff8193ce97 in bus_add_driver (drv=drv@entry=0xffffffff82c0ffa0 <virtio_net_driver>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/bus.c:673
+//#11 0xffffffff8193f48b in driver_register (drv=drv@entry=0xffffffff82c0ffa0 <virtio_net_driver>) at /home/hawk/Desktop/mqemu/kernel/drivers/base/driver.c:246
+//#12 0xffffffff816926bb in register_virtio_driver (driver=driver@entry=0xffffffff82c0ffa0 <virtio_net_driver>) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio.c:370
+//#13 0xffffffff832ea609 in virtio_net_driver_init () at /home/hawk/Desktop/mqemu/kernel/drivers/net/virtio_net.c:5050
+//#14 0xffffffff81001a63 in do_one_initcall (fn=0xffffffff832ea580 <virtio_net_driver_init>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1238
+//#15 0xffffffff8328d1d7 in do_initcall_level (command_line=0xffff88810033a140 "rdinit", level=6) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1300
+//#16 do_initcalls () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1316
+//#17 do_basic_setup () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1335
+//#18 kernel_init_freeable () at /home/hawk/Desktop/mqemu/kernel/init/main.c:1548
+//#19 0xffffffff81f657a5 in kernel_init (unused=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/init/main.c:1437
+//#20 0xffffffff810baddf in ret_from_fork (prev=<optimized out>, regs=0xffffc90000013f58, fn=0xffffffff81f65790 <kernel_init>, fn_arg=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/process.c:147
+//#21 0xffffffff8100244a in ret_from_fork_asm () at /home/hawk/Desktop/mqemu/kernel/arch/x86/entry/entry_64.S:243
+//#22 0x0000000000000000 in ?? ()
+static int virtnet_probe(struct virtio_device *vdev)
+{
+    ...
+	dev->netdev_ops = &virtnet_netdev;
+    ...
+	/* Enable multiqueue by default */
+	if (num_online_cpus() >= max_queue_pairs)
+		vi->curr_queue_pairs = max_queue_pairs;
+	else
+		vi->curr_queue_pairs = num_online_cpus();
+	vi->max_queue_pairs = max_queue_pairs;
+
+	/* Allocate/initialize the rx/tx queues, and invoke find_vqs */
+	err = init_vqs(vi);
+    ...
+	return 0;
+}
+
+static int init_vqs(struct virtnet_info *vi)
+{
+	int ret;
+
+	/* Allocate send & receive queues */
+	ret = virtnet_alloc_queues(vi);
+	if (ret)
+		goto err;
+
+	ret = virtnet_find_vqs(vi);
+	if (ret)
+		goto err_free;
+    ...
+	return 0;
+}
+
+static int virtnet_find_vqs(struct virtnet_info *vi)
+{
+	/* We expect 1 RX virtqueue followed by 1 TX virtqueue, followed by
+	 * possible N-1 RX/TX queue pairs used in multiqueue mode, followed by
+	 * possible control vq.
+	 */
+	total_vqs = vi->max_queue_pairs * 2 +
+		    virtio_has_feature(vi->vdev, VIRTIO_NET_F_CTRL_VQ);
+
+	/* Allocate space for find_vqs parameters */
+	vqs = kcalloc(total_vqs, sizeof(*vqs), GFP_KERNEL);
+    ...
+	ret = virtio_find_vqs_ctx(vi->vdev, total_vqs, vqs, callbacks,
+				  names, ctx, NULL);
+    ...
+}
+
+static inline
+int virtio_find_vqs_ctx(struct virtio_device *vdev, unsigned nvqs,
+			struct virtqueue *vqs[], vq_callback_t *callbacks[],
+			const char * const names[], const bool *ctx,
+			struct irq_affinity *desc)
+{
+	return vdev->config->find_vqs(vdev, nvqs, vqs, callbacks, names, ctx,
+				      desc);
+}
+
+static int vp_modern_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
+			      struct virtqueue *vqs[],
+			      vq_callback_t *callbacks[],
+			      const char * const names[], const bool *ctx,
+			      struct irq_affinity *desc)
+{
+	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
+	struct virtqueue *vq;
+	int rc = vp_find_vqs(vdev, nvqs, vqs, callbacks, names, ctx, desc);
+
+	if (rc)
+		return rc;
+
+	/* Select and activate all queues. Has to be done last: once we do
+	 * this, there's no way to go back except reset.
+	 */
+	list_for_each_entry(vq, &vdev->vqs, list)
+		vp_modern_set_queue_enable(&vp_dev->mdev, vq->index, true);
+
+	return 0;
+}
+
+int vp_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
+		struct virtqueue *vqs[], vq_callback_t *callbacks[],
+		const char * const names[], const bool *ctx,
+		struct irq_affinity *desc)
+{
+	/* Try MSI-X with one vector per queue. */
+	err = vp_find_vqs_msix(vdev, nvqs, vqs, callbacks, names, true, ctx, desc);
+	if (!err)
+		return 0;
+    ...
+}
+
+static int vp_find_vqs_msix(struct virtio_device *vdev, unsigned int nvqs,
+		struct virtqueue *vqs[], vq_callback_t *callbacks[],
+		const char * const names[], bool per_vq_vectors,
+		const bool *ctx,
+		struct irq_affinity *desc)
+{
+    ...
+	allocated_vectors = vp_dev->msix_used_vectors;
+	for (i = 0; i < nvqs; ++i) {
+        ...
+		vqs[i] = vp_setup_vq(vdev, queue_idx++, callbacks[i], names[i],
+				     ctx ? ctx[i] : false,
+				     msix_vec);
+	}
+	return 0;
+    ...
+}
+
+static struct virtqueue *vp_setup_vq(struct virtio_device *vdev, unsigned int index,
+				     void (*callback)(struct virtqueue *vq),
+				     const char *name,
+				     bool ctx,
+				     u16 msix_vec)
+{
+    ...
+	vq = vp_dev->setup_vq(vp_dev, info, index, callback, name, ctx,
+			      msix_vec);
+	info->vq = vq;
+    ...
+	vp_dev->vqs[index] = info;
+	return vq;
+    ...
+}
+
+static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
+				  struct virtio_pci_vq_info *info,
+				  unsigned int index,
+				  void (*callback)(struct virtqueue *vq),
+				  const char *name,
+				  bool ctx,
+				  u16 msix_vec)
+{
+    ...
+	/* create the vring */
+	vq = vring_create_virtqueue(index, num,
+				    SMP_CACHE_BYTES, &vp_dev->vdev,
+				    true, true, ctx,
+				    notify, callback, name);
+    ...
+	err = vp_active_vq(vq, msix_vec);
+    ...
+	vq->priv = (void __force *)vp_modern_map_vq_notify(mdev, index, NULL);
+    ...
+}
+
+static int vp_active_vq(struct virtqueue *vq, u16 msix_vec)
+{
+	struct virtio_pci_device *vp_dev = to_vp_device(vq->vdev);
+	struct virtio_pci_modern_device *mdev = &vp_dev->mdev;
+	unsigned long index;
+
+	index = vq->index;
+
+	/* activate the queue */
+	vp_modern_set_queue_size(mdev, index, virtqueue_get_vring_size(vq));
+	vp_modern_queue_address(mdev, index, virtqueue_get_desc_addr(vq),
+				virtqueue_get_avail_addr(vq),
+				virtqueue_get_used_addr(vq));
+
+	if (msix_vec != VIRTIO_MSI_NO_VECTOR) {
+		msix_vec = vp_modern_queue_vector(mdev, index, msix_vec);
+		if (msix_vec == VIRTIO_MSI_NO_VECTOR)
+			return -EBUSY;
+	}
+
+	return 0;
+}
+
+void vp_modern_set_queue_size(struct virtio_pci_modern_device *mdev, u16 index, u16 size)
+{
+	vp_iowrite16(index, &mdev->common->queue_select);
+	vp_iowrite16(size, &mdev->common->queue_size);
+
+}
+
+void vp_modern_queue_address(struct virtio_pci_modern_device *mdev,
+			     u16 index, u64 desc_addr, u64 driver_addr,
+			     u64 device_addr)
+{
+	struct virtio_pci_common_cfg __iomem *cfg = mdev->common;
+
+	vp_iowrite16(index, &cfg->queue_select);
+
+	vp_iowrite64_twopart(desc_addr, &cfg->queue_desc_lo,
+			     &cfg->queue_desc_hi);
+	vp_iowrite64_twopart(driver_addr, &cfg->queue_avail_lo,
+			     &cfg->queue_avail_hi);
+	vp_iowrite64_twopart(device_addr, &cfg->queue_used_lo,
+			     &cfg->queue_used_hi);
+}
+
+void vp_modern_set_queue_enable(struct virtio_pci_modern_device *mdev,
+				u16 index, bool enable)
+{
+	vp_iowrite16(index, &mdev->common->queue_select);
+	vp_iowrite16(enable, &mdev->common->queue_enable);
+}
+```
+可以看到，这里分配了对应的**virtqueue**数据，并向[**vp_modern_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern_dev.c#L223)中解析的**VIRTIO_PCI_CAP_COMMON_CFG配置空间**写入对应的信息，符合前面[virtio设备的virtio组件设置](#virtio组件)部分的分析
+
+## ~~数据处理~~
+
+### ~~数据传输~~
+
+### ~~数据通知~~
 
 # 参考
 
