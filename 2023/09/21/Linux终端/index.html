@@ -1,0 +1,223 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Linux终端 | H4wk1ns's blog</title><meta name="keywords" content="linux,内核"><meta name="author" content="H4wk1ns"><meta name="copyright" content="H4wk1ns"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="前言之前就对TTY、PTY和PTS等概念比较迷惑，但因为知识储备问题并没有细究。最近刚好看到几篇相关的文章，觉得讲的非常不错，打算整理一下。 终端架构目前Linux中终端的整体架构如下所示  其基本的工作流程如下所示：  终端模拟器(Terminal Emulator)打开&#x2F;dev&#x2F;ptmx(pseudo terminal master multiplexer)设备，分配一个可用的ptm(pseu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux终端">
+<meta property="og:url" content="https://jiaweihawk.github.io/2023/09/21/Linux%E7%BB%88%E7%AB%AF/index.html">
+<meta property="og:site_name" content="H4wk1ns&#39;s blog">
+<meta property="og:description" content="前言之前就对TTY、PTY和PTS等概念比较迷惑，但因为知识储备问题并没有细究。最近刚好看到几篇相关的文章，觉得讲的非常不错，打算整理一下。 终端架构目前Linux中终端的整体架构如下所示  其基本的工作流程如下所示：  终端模拟器(Terminal Emulator)打开&#x2F;dev&#x2F;ptmx(pseudo terminal master multiplexer)设备，分配一个可用的ptm(pseu">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://jiaweihawk.github.io/img/background.jpg">
+<meta property="article:published_time" content="2023-09-21T08:08:02.000Z">
+<meta property="article:modified_time" content="2024-10-16T15:08:39.031Z">
+<meta property="article:author" content="H4wk1ns">
+<meta property="article:tag" content="linux">
+<meta property="article:tag" content="内核">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://jiaweihawk.github.io/img/background.jpg"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://jiaweihawk.github.io/2023/09/21/Linux%E7%BB%88%E7%AB%AF/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容：${query}"}},
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    jQuery: 'https://cdn.jsdelivr.net/npm/jquery@latest/dist/jquery.min.js',
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/js/jquery.justifiedGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/justifiedGallery/dist/css/justifiedGallery.min.css'
+    },
+    fancybox: {
+      js: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/@fancyapps/fancybox@latest/dist/jquery.fancybox.min.css'
+    }
+  },
+  isPhotoFigcaption: true,
+  islazyload: false,
+  isanchor: true
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Linux终端',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2024-10-16 23:08:39'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+    const fontSizeVal = saveToLocal.get('global-font-size')
+    if (fontSizeVal !== undefined) {
+      document.documentElement.style.setProperty('--global-font-size', fontSizeVal + 'px')
+    }
+    })(window)</script><link rel="stylesheet" href="/static/css/custom.css"><meta name="generator" content="Hexo 5.4.2"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="author-avatar"><img class="avatar-img" src="/img/profile.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data"><div class="data-item is-center"><div class="data-item-link"><a href="/archives/"><div class="headline">文章</div><div class="length-num">45</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/tags/"><div class="headline">标签</div><div class="length-num">18</div></a></div></div><div class="data-item is-center"><div class="data-item-link"><a href="/categories/"><div class="headline">分类</div><div class="length-num">9</div></a></div></div></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('/img/background.jpg')"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">H4wk1ns's blog</a></span><div id="menus"><div id="search-button"><a class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">Linux终端</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2023-09-21T08:08:02.000Z" title="发表于 2023-09-21 16:08:02">2023-09-21</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-10-16T15:08:39.031Z" title="更新于 2024-10-16 23:08:39">2024-10-16</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%86%85%E6%A0%B8/">内核</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">1.4k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>4分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="Linux终端"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p>之前就对TTY、PTY和PTS等概念比较迷惑，但因为知识储备问题并没有细究。最近刚好看到几篇相关的文章，觉得讲的非常不错，打算整理一下。</p>
+<h1 id="终端架构"><a href="#终端架构" class="headerlink" title="终端架构"></a>终端架构</h1><p>目前Linux中终端的整体架构如下所示</p>
+<p><img src="整体架构图.png" alt="Linux终端架构"></p>
+<p>其基本的工作流程如下所示：</p>
+<ol>
+<li>终端模拟器(Terminal Emulator)打开<code>/dev/ptmx</code>(pseudo terminal master multiplexer)设备，分配一个可用的ptm(pseudo terminal master)设备的文件描述符。如<a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/blob/2ccdd1b13c591d306f0401d98dedc4bdcd02b421/drivers/tty/pty.c#L824-L849">ptmx_open()</a>所示，Linux内核在打开ptm设备时，也会自动的创建一个pts(pseudo terminal slave)设备，与该ptm一一对应。</li>
+<li>终端模拟器<code>fork()</code>子进程。子进程打开之前ptm设备对应的pts设备，并使用<code>dup()</code>将打开的pts设备的文件描述符设备为子进程的标准输入、标准输出和标准错误输出。</li>
+<li>子进程执行<strong>bash</strong>程序。此时，<strong>bash</strong>和终端模拟器通过伪终端(pty, pseudo terminal)进行通信，即终端模拟器通过ptm设备读取的数据是<strong>bash</strong>通过pts设备写入的数据，而<strong>bash</strong>通过pts设备读取的数据是终端模拟器通过ptm设备写入的数据。</li>
+</ol>
+<h1 id="发展历史"><a href="#发展历史" class="headerlink" title="发展历史"></a>发展历史</h1><p>初看整个终端架构，大部分人都会觉得其过于复杂。为什么要引入pty概念呢，不能通过内核中的管道等机制实现终端模拟器和<strong>bash</strong>的通信吗？<br>实际上，这个架构的形成是因为Linux内核需要保持对早期终端设备的兼容性，整个终端设备的发展历史如下所示：</p>
+<h2 id="电传打字机"><a href="#电传打字机" class="headerlink" title="电传打字机"></a>电传打字机</h2><p>电传打字机(Teletype, tty)是早期的计算机输入输出设备，如<img src="电传打字机.jpg" alt="借用Waynerv大佬的图">所示。</p>
+<p>那时候因为计算机很昂贵，所以不存在个人电脑一说，都是服务器-终端架构(类似于现在的云电脑，属于是殊途同归了)。即电传打字机通过两条线缆连接到计算机的UART(Universal Asynchronous Receiver and Transmitter)接口，一条线缆传输电传打字机键盘输入的信息到服务器，一条线缆传输服务器的输出信号到电传打字机，整个系统架构如<img src="tty整体架构图.png" alt="tty整体架构提">所示。</p>
+<p>整个UART驱动、Line Discipline模块和TTY驱动共同组成了一个TTY，其整体工作流程如下所示</p>
+<ol>
+<li>在电传打字机上按下按钮并产生电信号，电信号会通过线缆传送到服务器</li>
+<li>服务器的UART驱动会将电缆传送的电信号转换为ASCII字符并交给Line Discipline模块处理</li>
+<li>如<a target="_blank" rel="noopener" href="https://github.com/torvalds/linux/blob/2ccdd1b13c591d306f0401d98dedc4bdcd02b421/drivers/tty/n_tty.c#L1592-L1631">__receive_buf()</a>所示，Line Discipline模块会缓存所有的ASCII字符并解析特殊字符，一直等到遇到指定字符(^M, ^Z, ^C…)才会将相关数据或信号传递给tty core驱动或者TTY进程组</li>
+<li>tty core驱动将Line Discipine模块传递的数据通过标准输入传递给程序处理</li>
+<li>程序将要输出的数据写入到标准输出中，传递到tty core驱动</li>
+<li>tty core驱动将程序输出的数据写入到Line Discipline模块的临时缓冲区，然后传递给UART驱动进行处理</li>
+<li>UART驱动会将Line Discipline模块传递的数据，转换为电信号并通过线缆传送到电传打字机</li>
+</ol>
+<p>可以看到，在这个时期，这个架构是比较合理的。而内核为了保持对这个时期终端设备的兼容性，这个架构的很多组件在现有的架构中仍然被保留了下来。</p>
+<h2 id="虚拟控制台"><a href="#虚拟控制台" class="headerlink" title="虚拟控制台"></a>虚拟控制台</h2><p><img src="虚拟控制台.png" alt="Linux虚拟控制台"><br>随着时代的发展，个人电脑蓬勃发展，显示器和键盘成为计算机主流的输入输出设备，UART和电传打字机已经不复存在。为了在保持兼容性的基础上适应时代变化，Linu内核通过软件实现模拟出vt(虚拟控制台，没有什么问题是多加一个抽象层不能解决的)，并将计算机连接的键盘和显示器作为虚拟控制台实际的输入输出即可，其架构如<img src="虚拟控制台架构.png" alt="虚拟控制台架构">所示</p>
+<p>可以看到，和电传打字机时期的终端架构没什么太大的变化，仅仅是将硬件的电传打字机终端通过内核模块进行软件抽象而已。</p>
+<h2 id="伪终端"><a href="#伪终端" class="headerlink" title="伪终端"></a>伪终端</h2><p>虽然Linux通过内核的虚拟控制台实现了对终端硬件设备的模拟，但是虚拟控制台仍然无法适应如下的许多场景：</p>
+<ol>
+<li>用户希望使用由用户实现的终端模拟程序，以拓展终端的功能，比如界面美化等功能。</li>
+<li>用户希望实现通过网络访问远程主机上的面向终端的程序(如<code>vi</code>等)。这些程序需要执行一些面向终端的操作，如通过termios接口设置终端的<code>icanon</code>等设置，从而实现终端对前台job的控制等。因此无法简单通过管道等机制进行通信，需要某种机制能接入当前的tty系统。</li>
+</ol>
+<p>因此，为了在保持兼容性的前提下，满足如上的需求，则产生了最开头介绍的架构，如<img src="整体架构图.png" alt="伪终端架构">所示。</p>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><ol>
+<li><a target="_blank" rel="noopener" href="https://waynerv.com/posts/how-tty-system-works/">Unix 终端系统（TTY）是如何工作的</a></li>
+<li><a target="_blank" rel="noopener" href="https://ytcoode.io/article/到底什么是标准输入输出/index.html">到底什么是标准输入输出</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.wowotech.net/tty_framework/application_view.html">Linux TTY framework(3)_从应用的角度看TTY设备</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cnblogs.com/zzdyyy/p/7538077.html">Linux 的伪终端的基本原理 及其在远程登录（SSH，telnet等）中的应用</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.kawabangga.com/posts/4515">TTY 到底是什么？</a></li>
+</ol>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="mailto:undefined">H4wk1ns</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="https://jiaweihawk.github.io/2023/09/21/Linux%E7%BB%88%E7%AB%AF/">https://jiaweihawk.github.io/2023/09/21/Linux终端/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://jiaweihawk.github.io" target="_blank">H4wk1ns's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/linux/">linux</a><a class="post-meta__tags" href="/tags/%E5%86%85%E6%A0%B8/">内核</a></div><div class="post_share"><div class="social-share" data-image="/img/background.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/social-share.js/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/social-share.js/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/2023/08/23/linux%E5%86%85%E6%A0%B8%E7%A1%AC%E4%B8%AD%E6%96%AD%E5%88%86%E6%9E%90/"><img class="prev-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">上一篇</div><div class="prev_info">linux内核硬中断分析</div></div></a></div><div class="next-post pull-right"><a href="/2024/04/08/qemu%E5%9F%BA%E6%9C%AC%E7%9F%A5%E8%AF%86/"><img class="next-cover" src="/img/background.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">qemu基本知识</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span> 相关推荐</span></div><div class="relatedPosts-list"><div><a href="/2023/08/23/linux内核硬中断分析/" title="linux内核硬中断分析"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-08-23</div><div class="title">linux内核硬中断分析</div></div></a></div><div><a href="/2022/05/15/linux内核编译/" title="linux内核编译"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-05-15</div><div class="title">linux内核编译</div></div></a></div><div><a href="/2022/09/11/分区-文件系统/" title="分区-文件系统"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-09-11</div><div class="title">分区-文件系统</div></div></a></div><div><a href="/2024/04/14/网卡与网络栈/" title="网卡与网络栈"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2024-04-14</div><div class="title">网卡与网络栈</div></div></a></div><div><a href="/2022/08/26/LinuxFoundation-mentorship/" title="LinuxFoundation mentorship"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-08-26</div><div class="title">LinuxFoundation mentorship</div></div></a></div><div><a href="/2022/07/04/xv6-七/" title="xv6-七"><img class="cover" src="/img/background.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2022-07-04</div><div class="title">xv6-七</div></div></a></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="card-info-avatar is-center"><img class="avatar-img" src="/img/profile.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/><div class="author-info__name">H4wk1ns</div><div class="author-info__description">coder && ctfer</div></div><div class="card-info-data"><div class="card-info-data-item is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">45</div></a></div><div class="card-info-data-item is-center"><a href="/tags/"><div class="headline">标签</div><div class="length-num">18</div></a></div><div class="card-info-data-item is-center"><a href="/categories/"><div class="headline">分类</div><div class="length-num">9</div></a></div></div><a class="button--animated" id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/jiaweihawk"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="/static/cv/cv_zh.pdf" target="_blank" title="个人简历"><i class="fa-solid fa-file-pdf"></i></a></div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%89%8D%E8%A8%80"><span class="toc-number">1.</span> <span class="toc-text">前言</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BB%88%E7%AB%AF%E6%9E%B6%E6%9E%84"><span class="toc-number">2.</span> <span class="toc-text">终端架构</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%91%E5%B1%95%E5%8E%86%E5%8F%B2"><span class="toc-number">3.</span> <span class="toc-text">发展历史</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%B5%E4%BC%A0%E6%89%93%E5%AD%97%E6%9C%BA"><span class="toc-number">3.1.</span> <span class="toc-text">电传打字机</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E6%8E%A7%E5%88%B6%E5%8F%B0"><span class="toc-number">3.2.</span> <span class="toc-text">虚拟控制台</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%AA%E7%BB%88%E7%AB%AF"><span class="toc-number">3.3.</span> <span class="toc-text">伪终端</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">4.</span> <span class="toc-text">参考</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/23/virtio%E7%AE%80%E4%BB%8B/" title="virtio简介">virtio简介</a><time datetime="2024-08-23T15:05:52.000Z" title="发表于 2024-08-23 23:05:52">2024-08-23</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/08/04/qemu%E7%9A%84PCI%E8%AE%BE%E5%A4%87/" title="qemu的PCI设备">qemu的PCI设备</a><time datetime="2024-08-04T04:33:06.000Z" title="发表于 2024-08-04 12:33:06">2024-08-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/31/qemu%E8%AE%BE%E5%A4%87%E6%A8%A1%E5%9E%8B/" title="qemu设备模型">qemu设备模型</a><time datetime="2024-07-31T15:38:12.000Z" title="发表于 2024-07-31 23:38:12">2024-07-31</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/07/20/qemu%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/" title="qemu内存模型">qemu内存模型</a><time datetime="2024-07-20T01:37:13.000Z" title="发表于 2024-07-20 09:37:13">2024-07-20</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/2024/04/14/%E7%BD%91%E5%8D%A1%E4%B8%8E%E7%BD%91%E7%BB%9C%E6%A0%88/" title="网卡与网络栈">网卡与网络栈</a><time datetime="2024-04-14T10:24:48.000Z" title="发表于 2024-04-14 18:24:48">2024-04-14</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2021 - 2024 By H4wk1ns</div><div class="footer_custom_text">come to hack me!!</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="font-plus" type="button" title="放大字体"><i class="fas fa-plus"></i></button><button id="font-minus" type="button" title="缩小字体"><i class="fas fa-minus"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div id="local-search"><div class="search-dialog"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div></div><hr/><div id="local-search-results"></div><span class="search-close-button"><i class="fas fa-times"></i></span></div><div id="search-mask"></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="/js/search/local-search.js"></script><div class="js-pjax"><script>if (!window.MathJax) {
+  window.MathJax = {
+    loader: {
+      source: {
+        '[tex]/amsCd': '[tex]/amscd'
+      }
+    },
+    tex: {
+      inlineMath: [ ['$','$'], ["\\(","\\)"]],
+      tags: 'ams'
+    },
+    options: {
+      renderActions: {
+        findScript: [10, doc => {
+          for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+            const display = !!node.type.match(/; *mode=display/)
+            const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+            const text = document.createTextNode('')
+            node.parentNode.replaceChild(text, node)
+            math.start = {node: text, delim: '', n: 0}
+            math.end = {node: text, delim: '', n: 0}
+            doc.math.push(math)
+          }
+        }, ''],
+        addClass: [200,() => {
+          document.querySelectorAll('mjx-container:not([display=\'true\']').forEach( node => {
+            const target = node.parentNode
+            if (!target.classList.contains('has-jax')) {
+              target.classList.add('mathjax-overflow')
+            }
+          })
+        }, '', false]
+      }
+    }
+  }
+  
+  const script = document.createElement('script')
+  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+  script.id = 'MathJax-script'
+  script.async = true
+  document.head.appendChild(script)
+} else {
+  MathJax.startup.document.state(0)
+  MathJax.texReset()
+  MathJax.typeset()
+}</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
