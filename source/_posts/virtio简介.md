@@ -2964,9 +2964,198 @@ void vp_modern_set_queue_enable(struct virtio_pci_modern_device *mdev,
 ```
 可以看到，这里分配了对应的**virtqueue**数据，并向[**vp_modern_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern_dev.c#L223)中解析的**VIRTIO_PCI_CAP_COMMON_CFG配置空间**写入对应的信息，符合前面[virtio设备的virtio组件设置](#virtio组件)部分的分析
 
-## ~~数据处理~~
+## 数据处理
 
-### ~~数据传输~~
+### 数据传输
+
+根据前面[virtio设备的数据传输](#数据传输)章节，由于**guest**的pva就是**qemu**进程空间的**hva**，因此对于**guest**来说，正常访问前面分配的**virtqueue**地址即可和**virtio设备**正常进行数据通信。
+
+这里分析**guest**发送数据的代码来加以确认。在前面[guest的virtio设置](#virtio设置-1)小结简单介绍了[**virtnet_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/net/virtio_net.c#L4624)，其中其替换了**struct net_device**结构体的**netdev_ops**字段为[**virtnet_netdev**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/net/virtio_net.c#L4169)，如下所示
+```c
+static int virtnet_probe(struct virtio_device *vdev)
+{
+	struct net_device *dev;
+    ...
+	/* Allocate ourselves a network device with room for our info */
+	dev = alloc_etherdev_mq(sizeof(struct virtnet_info), max_queue_pairs);
+	if (!dev)
+		return -ENOMEM;
+
+	/* Set up network device as normal. */
+	dev->priv_flags |= IFF_UNICAST_FLT | IFF_LIVE_ADDR_CHANGE |
+			   IFF_TX_SKB_NO_LINEAR;
+	dev->netdev_ops = &virtnet_netdev;
+	dev->features = NETIF_F_HIGHDMA;
+
+	dev->ethtool_ops = &virtnet_ethtool_ops;
+    ...
+}
+
+static const struct net_device_ops virtnet_netdev = {
+	.ndo_open            = virtnet_open,
+	.ndo_stop   	     = virtnet_close,
+	.ndo_start_xmit      = start_xmit,
+	.ndo_validate_addr   = eth_validate_addr,
+	.ndo_set_mac_address = virtnet_set_mac_address,
+	.ndo_set_rx_mode     = virtnet_set_rx_mode,
+	.ndo_get_stats64     = virtnet_stats,
+	.ndo_vlan_rx_add_vid = virtnet_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid = virtnet_vlan_rx_kill_vid,
+	.ndo_bpf		= virtnet_xdp,
+	.ndo_xdp_xmit		= virtnet_xdp_xmit,
+	.ndo_features_check	= passthru_features_check,
+	.ndo_get_phys_port_name	= virtnet_get_phys_port_name,
+	.ndo_set_features	= virtnet_set_features,
+	.ndo_tx_timeout		= virtnet_tx_timeout,
+};
+```
+
+其中[**start_xmit**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/net/virtio_net.c#L2402)就是发送数据包的回调函数，如下所示
+```c
+//#0  0xffffffff816969a8 in virtqueue_add (gfp=<optimized out>, ctx=<optimized out>, data=<optimized out>, in_sgs=0, out_sgs=1, total_sg=1, sgs=0xffffc90000003b98, _vq=0xffff88810096f900) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio_ring.c:2209
+//#1  virtqueue_add_outbuf (vq=0xffff88810096f900, sg=sg@entry=0xffff888100370808, num=1, data=data@entry=0xffff88801cefb500, gfp=gfp@entry=2080) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio_ring.c:2267
+//#2  0xffffffff819ed584 in xmit_skb (skb=0xffff88801cefb500, sq=0xffff888100370800) at /home/hawk/Desktop/mqemu/kernel/drivers/net/virtio_net.c:2399
+//#3  start_xmit (skb=0xffff88801cefb500, dev=0xffff88810793c000) at /home/hawk/Desktop/mqemu/kernel/drivers/net/virtio_net.c:2426
+//#4  0xffffffff81c11797 in __netdev_start_xmit (more=false, dev=0xffff88810793c000, skb=0xffff88801cefb500, ops=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/include/linux/netdevice.h:4903
+//#5  netdev_start_xmit (more=false, txq=0xffff88810080f200, dev=0xffff88810793c000, skb=0xffff88801cefb500) at /home/hawk/Desktop/mqemu/kernel/include/linux/netdevice.h:4917
+//#6  xmit_one (more=false, txq=0xffff88810080f200, dev=0xffff88810793c000, skb=0xffff88801cefb500) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:3531
+//#7  dev_hard_start_xmit (first=first@entry=0xffff88801cefb500, dev=dev@entry=0xffff88810793c000, txq=txq@entry=0xffff88810080f200, ret=ret@entry=0xffffc90000003c64) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:3547
+//#8  0xffffffff81c66525 in sch_direct_xmit (skb=skb@entry=0xffff88801cefb500, q=q@entry=0xffff8880289bbc00, dev=dev@entry=0xffff88810793c000, txq=txq@entry=0xffff88810080f200, root_lock=root_lock@entry=0x0 <fixed_percpu_data>, validate=validate@entry=true) at /home/hawk/Desktop/mqemu/kernel/net/sched/sch_generic.c:343
+//#9  0xffffffff81c11e7e in __dev_xmit_skb (txq=0xffff88810080f200, dev=0xffff88810793c000, q=0xffff8880289bbc00, skb=0xffff88801cefb500) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:3760
+//#10 __dev_queue_xmit (skb=skb@entry=0xffff88801cefb500, sb_dev=sb_dev@entry=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:4301
+//#11 0xffffffff81d6d34a in dev_queue_xmit (skb=0xffff88801cefb500) at /home/hawk/Desktop/mqemu/kernel/include/linux/netdevice.h:3091
+//#12 neigh_hh_output (skb=<optimized out>, hh=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/include/net/neighbour.h:526
+//#13 neigh_output (skip_cache=false, skb=0xffff88801cefb500, n=0xffff888028686800) at /home/hawk/Desktop/mqemu/kernel/include/net/neighbour.h:540
+//#14 ip6_finish_output2 (net=<optimized out>, sk=<optimized out>, skb=0xffff88801cefb500) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/ip6_output.c:137
+//#15 0xffffffff81d949a5 in ndisc_send_skb (skb=0xffff88801cefb500, daddr=<optimized out>, saddr=0xffffc90000003e80) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/ndisc.c:509
+//#16 0xffffffff81d97afa in ndisc_send_rs (dev=<optimized out>, saddr=<optimized out>, daddr=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/ndisc.c:719
+//#17 0xffffffff81d7c143 in addrconf_rs_timer (t=0xffff8881070a63b0) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/addrconf.c:4037
+//#18 0xffffffff811b64a5 in call_timer_fn (timer=timer@entry=0xffff8881070a63b0, fn=fn@entry=0xffffffff81d7c070 <addrconf_rs_timer>, baseclk=baseclk@entry=4294687232) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:1793
+//#19 0xffffffff811b6782 in expire_timers (head=0xffffc90000003f10, base=0xffff88813bc1e1c0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:1844
+//#20 __run_timers (base=0xffff88813bc1e1c0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2418
+//#21 __run_timer_base (base=0xffff88813bc1e1c0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2429
+//#22 0xffffffff811b688c in __run_timer_base (base=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2424
+//#23 run_timer_base (index=1) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2438
+//#24 run_timer_softirq (h=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2448
+//#25 0xffffffff81f6f6af in __do_softirq () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:554
+//#26 0xffffffff8110e814 in invoke_softirq () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:428
+//#27 __irq_exit_rcu () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:633
+//#28 irq_exit_rcu () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:645
+//#29 0xffffffff81f63220 in instr_sysvec_apic_timer_interrupt (regs=0xffffffff82a03de8) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/apic/apic.c:1043
+//#30 sysvec_apic_timer_interrupt (regs=0xffffffff82a03de8) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/apic/apic.c:1043
+static netdev_tx_t start_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	struct virtnet_info *vi = netdev_priv(dev);
+	struct send_queue *sq = &vi->sq[qnum];
+    ...
+	/* Try to transmit */
+	err = xmit_skb(sq, skb);
+    ...
+}
+
+static int xmit_skb(struct send_queue *sq, struct sk_buff *skb)
+{
+    ...
+	return virtqueue_add_outbuf(sq->vq, sq->sg, num_sg, skb, GFP_ATOMIC);
+}
+
+int virtqueue_add_outbuf(struct virtqueue *vq,
+			 struct scatterlist *sg, unsigned int num,
+			 void *data,
+			 gfp_t gfp)
+{
+	return virtqueue_add(vq, &sg, num, 1, 0, data, NULL, gfp);
+}
+
+static inline int virtqueue_add(struct virtqueue *_vq,
+				struct scatterlist *sgs[],
+				unsigned int total_sg,
+				unsigned int out_sgs,
+				unsigned int in_sgs,
+				void *data,
+				void *ctx,
+				gfp_t gfp)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	return vq->packed_ring ? virtqueue_add_packed(_vq, sgs, total_sg,
+					out_sgs, in_sgs, data, ctx, gfp) :
+				 virtqueue_add_split(_vq, sgs, total_sg,
+					out_sgs, in_sgs, data, ctx, gfp);
+}
+
+static inline int virtqueue_add_split(struct virtqueue *_vq,
+				      struct scatterlist *sgs[],
+				      unsigned int total_sg,
+				      unsigned int out_sgs,
+				      unsigned int in_sgs,
+				      void *data,
+				      void *ctx,
+				      gfp_t gfp)
+{
+    ...
+	dma_addr_t addr;
+
+	if (vring_map_one_sg(vq, sg, DMA_TO_DEVICE, &addr))
+		goto unmap_release;
+
+	prev = i;
+	/* Note that we trust indirect descriptor
+	 * table since it use stream DMA mapping.
+	 */
+	i = virtqueue_add_desc_split(_vq, desc, i, addr, sg->length,
+				     VRING_DESC_F_NEXT,
+				     indirect);
+    ...
+}
+
+static inline unsigned int virtqueue_add_desc_split(struct virtqueue *vq,
+						    struct vring_desc *desc,
+						    unsigned int i,
+						    dma_addr_t addr,
+						    unsigned int len,
+						    u16 flags,
+						    bool indirect)
+{
+	struct vring_virtqueue *vring = to_vvq(vq);
+	struct vring_desc_extra *extra = vring->split.desc_extra;
+	u16 next;
+
+	desc[i].flags = cpu_to_virtio16(vq->vdev, flags);
+	desc[i].addr = cpu_to_virtio64(vq->vdev, addr);
+	desc[i].len = cpu_to_virtio32(vq->vdev, len);
+
+	if (!indirect) {
+		next = extra[i].next;
+		desc[i].next = cpu_to_virtio16(vq->vdev, next);
+
+		extra[i].addr = addr;
+		extra[i].len = len;
+		extra[i].flags = flags;
+	} else
+		next = virtio16_to_cpu(vq->vdev, desc[i].next);
+
+	return next;
+}
+```
+这里**virtqueue**就是[**virtnet_probe()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/net/virtio_net.c#L4624)逻辑中绑定的
+```c
+static int virtnet_find_vqs(struct virtnet_info *vi)
+{
+    ...
+	ret = virtio_find_vqs_ctx(vi->vdev, total_vqs, vqs, callbacks,
+				  names, ctx, NULL);
+    ...
+	for (i = 0; i < vi->max_queue_pairs; i++) {
+		vi->rq[i].vq = vqs[rxq2vq(i)];
+		vi->rq[i].min_buf_len = mergeable_min_buf_len(vi, vi->rq[i].vq);
+		vi->sq[i].vq = vqs[txq2vq(i)];
+	}
+    ...
+}
+```
+
+可以看到，最后确实是通过[**virtqueue_add()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_ring.c#L2197)向**virtqueue**内存处读写完成数据传输。
 
 ### ~~数据通知~~
 
