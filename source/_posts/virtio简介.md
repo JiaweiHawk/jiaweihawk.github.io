@@ -3157,7 +3157,149 @@ static int virtnet_find_vqs(struct virtnet_info *vi)
 
 可以看到，最后确实是通过[**virtqueue_add()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_ring.c#L2197)向**virtqueue**内存处读写完成数据传输。
 
-### ~~数据通知~~
+### 数据通知
+
+根据前面[virtio设备的数据通知](#数据通知)小结，**guest**部分的数据通知也分为两部分——**guest**通知**virtio设备**、**virtio设备**中断**guest**
+
+#### 通知设备
+
+**guest**会使用**notify**字段的函数指针完成设备的通知，而**notify**字段则是在前面[驱动的virtio设置](#virtio设置-1)小节中的[**setup_vq()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_modern.c#L530)函数中注册的
+```c
+static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
+				  struct virtio_pci_vq_info *info,
+				  unsigned int index,
+				  void (*callback)(struct virtqueue *vq),
+				  const char *name,
+				  bool ctx,
+				  u16 msix_vec)
+{
+
+	bool (*notify)(struct virtqueue *vq);
+	struct virtqueue *vq;
+
+    ...
+	notify = vp_notify
+    ...
+	/* create the vring */
+	vq = vring_create_virtqueue(index, num,
+				    SMP_CACHE_BYTES, &vp_dev->vdev,
+				    true, true, ctx,
+				    notify, callback, name);
+    ...
+	vq->priv = (void __force *)vp_modern_map_vq_notify(mdev, index, NULL);
+}
+
+//#0  vp_notify (vq=0xffff88810097da00) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio_pci_common.c:42
+//#1  0xffffffff8169329a in virtqueue_notify (_vq=0xffff88810097da00) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio_ring.c:2370
+//#2  0xffffffff819ed798 in start_xmit (skb=0xffff888027fc8400, dev=0xffff888105ba2000) at /home/hawk/Desktop/mqemu/kernel/include/linux/skbuff.h:3197
+//#3  0xffffffff81c11797 in __netdev_start_xmit (more=false, dev=0xffff888105ba2000, skb=0xffff888027fc8400, ops=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/include/linux/netdevice.h:4903
+//#4  netdev_start_xmit (more=false, txq=0xffff888100814e00, dev=0xffff888105ba2000, skb=0xffff888027fc8400) at /home/hawk/Desktop/mqemu/kernel/include/linux/netdevice.h:4917
+//#5  xmit_one (more=false, txq=0xffff888100814e00, dev=0xffff888105ba2000, skb=0xffff888027fc8400) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:3531
+//#6  dev_hard_start_xmit (first=first@entry=0xffff888027fc8400, dev=dev@entry=0xffff888105ba2000, txq=txq@entry=0xffff888100814e00, ret=ret@entry=0xffffc900000d0bc4) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:3547
+//#7  0xffffffff81c66525 in sch_direct_xmit (skb=skb@entry=0xffff888027fc8400, q=q@entry=0xffff888027dc2800, dev=dev@entry=0xffff888105ba2000, txq=txq@entry=0xffff888100814e00, root_lock=root_lock@entry=0x0 <fixed_percpu_data>, validate=validate@entry=true) at /home/hawk/Desktop/mqemu/kernel/net/sched/sch_generic.c:343
+//#8  0xffffffff81c11e7e in __dev_xmit_skb (txq=0xffff888100814e00, dev=0xffff888105ba2000, q=0xffff888027dc2800, skb=0xffff888027fc8400) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:3760
+//#9  __dev_queue_xmit (skb=skb@entry=0xffff888027fc8400, sb_dev=sb_dev@entry=0x0 <fixed_percpu_data>) at /home/hawk/Desktop/mqemu/kernel/net/core/dev.c:4301
+//#10 0xffffffff81d6d34a in dev_queue_xmit (skb=0xffff888027fc8400) at /home/hawk/Desktop/mqemu/kernel/include/linux/netdevice.h:3091
+//#11 neigh_hh_output (skb=<optimized out>, hh=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/include/net/neighbour.h:526
+//#12 neigh_output (skip_cache=false, skb=0xffff888027fc8400, n=0xffff888027e26c00) at /home/hawk/Desktop/mqemu/kernel/include/net/neighbour.h:540
+//#13 ip6_finish_output2 (net=<optimized out>, sk=<optimized out>, skb=0xffff888027fc8400) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/ip6_output.c:137
+//#14 0xffffffff81d949a5 in ndisc_send_skb (skb=0xffff888027fc8400, daddr=<optimized out>, saddr=0xffffc900000d0de0) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/ndisc.c:509
+//#15 0xffffffff81d97afa in ndisc_send_rs (dev=<optimized out>, saddr=<optimized out>, daddr=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/ndisc.c:719
+//#16 0xffffffff81d7c143 in addrconf_rs_timer (t=0xffff888101bb9fb0) at /home/hawk/Desktop/mqemu/kernel/net/ipv6/addrconf.c:4037
+//#17 0xffffffff811b64a5 in call_timer_fn (timer=timer@entry=0xffff888101bb9fb0, fn=fn@entry=0xffffffff81d7c070 <addrconf_rs_timer>, baseclk=baseclk@entry=4294677504) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:1793
+//#18 0xffffffff811b6782 in expire_timers (head=0xffffc900000d0e70, base=0xffff88813bc1e1c0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:1844
+//#19 __run_timers (base=0xffff88813bc1e1c0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2418
+//#20 __run_timer_base (base=0xffff88813bc1e1c0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2429
+//#21 0xffffffff811b7807 in __run_timer_base (base=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer.c:2424
+//#22 0xffffffff811d0063 in tmigr_handle_remote_cpu (jif=4294677504, now=<optimized out>, cpu=0) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer_migration.c:908
+//#23 tmigr_handle_remote_up (ptr=0xffffc900000d0f20, child=<optimized out>, group=0xffff8881002e5a80) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer_migration.c:1000
+//#24 __walk_groups (tmc=<optimized out>, tmc=<optimized out>, data=0xffffc900000d0f20, up=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer_migration.c:488
+//#25 tmigr_handle_remote () at /home/hawk/Desktop/mqemu/kernel/kernel/time/timer_migration.c:1061
+//#26 0xffffffff81f6f6af in __do_softirq () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:554
+//#27 0xffffffff8110e814 in invoke_softirq () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:428
+//#28 __irq_exit_rcu () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:633
+//#29 irq_exit_rcu () at /home/hawk/Desktop/mqemu/kernel/kernel/softirq.c:645
+//#30 0xffffffff81f63220 in instr_sysvec_apic_timer_interrupt (regs=0xffffc9000009be38) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/apic/apic.c:1043
+//#31 sysvec_apic_timer_interrupt (regs=0xffffc9000009be38) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/apic/apic.c:1043
+bool vp_notify(struct virtqueue *vq)
+{
+	/* we write the queue's selector into the notification register to
+	 * signal the other end */
+	iowrite16(vq->index, (void __iomem *)vq->priv);
+	return true;
+}
+```
+
+可以看到，**guest**向VIRTIO_PCI_CAP_NOTIFY_CFG配置空间处写数据。而根据前面[virtio设备的通知设备](#通知设备)小结，Qemu向这部分内存空间注册了**ioeventfd**，从而通过**eventfd**机制唤醒**virtio设备**，完成通知
+
+#### 通知guest
+
+根据前面[virtio设备通知guest](#通知guest)小节，**virtio device**通知**guest**的方式是注入msix中断，而**guest**在前面[驱动的virtio设置](#virtio设置-1)的[**vp_find_vqs_msix()**](https://elixir.bootlin.com/linux/v6.9-rc2/source/drivers/virtio/virtio_pci_common.c#L287)中注册了相关的中断，从而完成处理
+
+```c
+static int vp_find_vqs_msix(struct virtio_device *vdev, unsigned int nvqs,
+		struct virtqueue *vqs[], vq_callback_t *callbacks[],
+		const char * const names[], bool per_vq_vectors,
+		const bool *ctx,
+		struct irq_affinity *desc)
+{
+    ...
+	err = vp_request_msix_vectors(vdev, nvectors, per_vq_vectors,
+				      per_vq_vectors ? desc : NULL);
+    ...
+	allocated_vectors = vp_dev->msix_used_vectors;
+	for (i = 0; i < nvqs; ++i) {
+        ...
+		if (!callbacks[i])
+			msix_vec = VIRTIO_MSI_NO_VECTOR;
+		else if (vp_dev->per_vq_vectors)
+			msix_vec = allocated_vectors++;
+		else
+			msix_vec = VP_MSIX_VQ_VECTOR;
+		vqs[i] = vp_setup_vq(vdev, queue_idx++, callbacks[i], names[i],
+				     ctx ? ctx[i] : false,
+				     msix_vec);
+        ...
+		/* allocate per-vq irq if available and necessary */
+		snprintf(vp_dev->msix_names[msix_vec],
+			 sizeof *vp_dev->msix_names,
+			 "%s-%s",
+			 dev_name(&vp_dev->vdev.dev), names[i]);
+		err = request_irq(pci_irq_vector(vp_dev->pci_dev, msix_vec),
+				  vring_interrupt, 0,
+				  vp_dev->msix_names[msix_vec],
+				  vqs[i]);
+    ...
+	}
+    ...
+}
+
+//#0  vring_interrupt (irq=28, _vq=0xffff88810097d900) at /home/hawk/Desktop/mqemu/kernel/drivers/virtio/virtio_ring.c:2571
+//#1  0xffffffff81180565 in __handle_irq_event_percpu (desc=desc@entry=0xffff888100815600) at /home/hawk/Desktop/mqemu/kernel/kernel/irq/handle.c:158
+//#2  0xffffffff81180753 in handle_irq_event_percpu (desc=0xffff888100815600) at /home/hawk/Desktop/mqemu/kernel/kernel/irq/handle.c:193
+//#3  handle_irq_event (desc=desc@entry=0xffff888100815600) at /home/hawk/Desktop/mqemu/kernel/kernel/irq/handle.c:210
+//#4  0xffffffff81185666 in handle_edge_irq (desc=0xffff888100815600) at /home/hawk/Desktop/mqemu/kernel/kernel/irq/chip.c:831
+//#5  0xffffffff810adfbc in generic_handle_irq_desc (desc=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/include/linux/irqdesc.h:161
+//#6  handle_irq (regs=0x0 <fixed_percpu_data>, desc=<optimized out>) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/irq.c:238
+//#7  __common_interrupt (regs=regs@entry=0xffffc90000003ef8, vector=vector@entry=35) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/irq.c:257
+//#8  0xffffffff81f60a7b in common_interrupt (regs=0xffffc90000003ef8, error_code=35) at /home/hawk/Desktop/mqemu/kernel/arch/x86/kernel/irq.c:247
+//#9  0xffffffff820013e6 in asm_common_interrupt () at /home/hawk/Desktop/mqemu/kernel/arch/x86/include/asm/idtentry.h:693
+//#10 0x0000000000000000 in ?? ()
+irqreturn_t vring_interrupt(int irq, void *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+    ...
+	/* Just a hint for performance: so it's ok that this can be racy! */
+	if (vq->event)
+		vq->event_triggered = true;
+
+	pr_debug("virtqueue callback for %p (%p)\n", vq, vq->vq.callback);
+	if (vq->vq.callback)
+		vq->vq.callback(&vq->vq);
+
+	return IRQ_HANDLED;
+}
+```
 
 # 参考
 
