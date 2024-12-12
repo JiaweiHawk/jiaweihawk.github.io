@@ -2748,7 +2748,11 @@ qemuMonitorJSONIOProcessEvent(qemuMonitor *mon,
 }
 ```
 
-可以看到，**libvirtd**会调用[**qemuMonitorJSONIOProcessLine()**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_monitor_json.c#L185)将字符串形式的返回值解析成json格式，并根据返回结果的类型进行处理：例如event类型的返回结果则会调用[**qemuMonitorJSONIOProcessEvent()**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_monitor_json.c#L143)进行处理，其会调用[**monitorCallbacks**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_process.c#L1796)中对应的callback和[**eventHandlers**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_monitor_json.c#L94)中对应的handler进行处理。再完成处理后，最后调用[**virCondBroadcast()**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/util/virthread.c#L198)唤醒发送**qmp**命令的任务，从而最终完成异步命令的处理
+可以看到，**libvirtd**会调用[**qemuMonitorJSONIOProcessLine()**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_monitor_json.c#L185)将字符串形式的返回值解析成json格式，并根据返回结果的类型进行处理
+
+例如以event类型的返回结果为例，其会调用[**qemuMonitorJSONIOProcessEvent()**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_monitor_json.c#L143)进行处理。其调用[**monitorCallbacks**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_process.c#L1796)中的[**qemuProcessHandleEvent()**](https://github.com/libvirt/libvirt/blob/81da7a2c2a2d490cddaaa77d3e3b36e210b38bd7/src/qemu/qemu_process.c#L541)将**event**添加到**driver->domainEventState->queue**中并利用定时器资源调用[**virObjectEventTimer()**](https://github.com/libvirt/libvirt/blob/81da7a2c2a2d490cddaaa77d3e3b36e210b38bd7/src/conf/object_event.c#L532)处理；其还会调用[**eventHandlers**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/qemu/qemu_monitor_json.c#L94)中对应的handler进行处理
+
+再完成处理后，最后调用[**virCondBroadcast()**](https://github.com/libvirt/libvirt/blob/c63bdd17b9f5c31a2511f173d60455b83d22c561/src/util/virthread.c#L198)唤醒发送**qmp**命令的任务，从而最终完成异步命令的处理
 
 ```c
 int
@@ -2787,8 +2791,6 @@ qemuMonitorSend(qemuMonitor *mon,
     return ret;
 }
 ```
-
-## ~~事件处理~~
 
 # 参考
 
