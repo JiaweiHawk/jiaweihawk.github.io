@@ -90,7 +90,7 @@ DEF("version", 0, QEMU_OPTION_version,
 "-version        display version information and exit\n", QEMU_ARCH_ALL)
 ```
 
-#### 复用方式
+#### 使用方式
 
 后续代码通过**include**这份文件，并定义 `DEF` 宏的不同实现即可完成复用：例如[qemu_options[]](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/vl.c#L922) 数组需要选项名称、参数标志、枚举值与架构掩码等信息，则如下定义即可复用
 
@@ -121,6 +121,33 @@ static const QEMUOption qemu_options[] = {
 ### qapi-gen
 
 qapi-gen 则更为复杂：它基于 .json 格式的 Schema 文件，生成对外暴露结构化接口的 QAPI 接口及相关代码，包括相关参数对象
+
+#### 构建过程
+
+类似于hxtool, qemu在[qapi/meson.build](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/meson.build)中注册了一个`custom_target`,在构建期调用`scripts/qapi-gen.py`基于[qapi/qapi-schema.json](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qapi-schema.json)转换为对应的 `.h`/`.c`文件，如下所示
+
+```
+// meson.build
+qapi_gen = find_program('scripts/qapi-gen.py')
+
+// qapi/meson.build
+qapi_files = custom_target('shared QAPI source files',
+  output: qapi_util_outputs + qapi_specific_outputs + qapi_nonmodule_outputs,
+  input: [ files('qapi-schema.json') ],
+  command: [ qapi_gen, '-o', 'qapi', '-b', '@INPUT0@' ],
+  depend_files: [ qapi_inputs, qapi_gen_depends ])
+```
+
+其中，[scripts/qapi-gen.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi-gen.py)相当于编译器，其按照[docs/devel/qapi-code-gen.rst](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/docs/devel/qapi-code-gen.rst)中定义的schema语法规则，解析 `.json` 文件并生成对应的文件，其规则基本如下所示:
+
+| schema规则 | 编译规则 | 生成产物 | 描述 |
+| :-: | :-: | :-: | :-: |
+| {'struct'/'enum'/'union'/'alternate':*} | [scripts/qapi/types.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/types.py)的gen*() | $(prefix)/qapi-types*.h/.c | 生成对应的C语言的数据结构 |
+| {'struct'/'enum'/'union'/'alternate':*} | [scripts/qapi/visit.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/visit.py)的visit*() | $(prefix)/qapi-visit*.h/.c | 生成数据结构和QObject结构相互转化的visit_type*() |
+| {'command':*} | [scripts/qapi/commands.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/commands.py)的gen*() | $(prefix)/qapi-commands*.h/.c | 生成用于qmp命令的qmp_marshal*() |
+| {'event':*} | [scripts/qapi/events.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/events.py)的gen*() | $(prefix)/qapi-events*.h/.c | 生成用于发送event的qapi_event*() |
+
+#### 使用方式
 
 ## 前端
 
