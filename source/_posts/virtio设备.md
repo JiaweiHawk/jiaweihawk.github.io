@@ -142,12 +142,237 @@ qapi_files = custom_target('shared QAPI source files',
 
 | schema规则 | 编译规则 | 生成产物 | 描述 |
 | :-: | :-: | :-: | :-: |
-| {'struct'/'enum'/'union'/'alternate':*} | [scripts/qapi/types.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/types.py)的gen*() | $(prefix)/qapi-types*.h/.c | 生成对应的C语言的数据结构 |
-| {'struct'/'enum'/'union'/'alternate':*} | [scripts/qapi/visit.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/visit.py)的visit*() | $(prefix)/qapi-visit*.h/.c | 生成数据结构和QObject结构相互转化的visit_type*() |
-| {'command':*} | [scripts/qapi/commands.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/commands.py)的gen*() | $(prefix)/qapi-commands*.h/.c | 生成用于qmp命令的qmp_marshal*() |
-| {'event':*} | [scripts/qapi/events.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/events.py)的gen*() | $(prefix)/qapi-events*.h/.c | 生成用于发送event的qapi_event*() |
+| `{'struct'/'enum'/'union'/'alternate':*}` | [scripts/qapi/types.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/types.py)的gen*() | $(prefix)/qapi-types*.h/.c | 生成对应的C语言的数据结构 |
+| `{'struct'/'enum'/'union'/'alternate':*}` | [scripts/qapi/visit.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/visit.py)的visit*() | $(prefix)/qapi-visit*.h/.c | 生成数据结构和QObject结构相互转化的visit_type*() |
+| `{'command':*}` | [scripts/qapi/commands.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/commands.py)的gen*() | $(prefix)/qapi-commands*.h/.c | 生成用于qmp命令的qmp_marshal*() |
+| `{'event':*}` | [scripts/qapi/events.py](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/scripts/qapi/events.py)的gen*() | $(prefix)/qapi-events*.h/.c | 生成用于发送event的qapi_event*() |
 
 #### 使用方式
+
+后续代码会通过**include**相关的生成产物，从而完成相关的数据结构/接口的调用，可以整理为如下几种方式：
+
+##### 数据结构
+
+这里以网卡后端所需要的数据结构**struct Netdev**(下面在详细分析)为例
+
+###### struct Netdev
+
+qemu会在[qapi/net.json](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/net.json#L725-L760)中依照相关的schema规则定义数据结构,如下所示
+
+```c
+##
+# @Netdev:
+#
+# Captures the configuration of a network device.
+#
+# @id: identifier for monitor commands.
+#
+# @type: Specify the driver used for interpreting remaining arguments.
+#
+# Since: 1.2
+##
+{ 'union': 'Netdev',
+  'base': { 'id': 'str', 'type': 'NetClientDriver' },
+  'discriminator': 'type',
+  'data': {
+    'nic':      'NetLegacyNicOptions',
+    'user':     'NetdevUserOptions',
+    'tap':      'NetdevTapOptions',
+    'l2tpv3':   'NetdevL2TPv3Options',
+    'socket':   'NetdevSocketOptions',
+    'stream':   'NetdevStreamOptions',
+    'dgram':    'NetdevDgramOptions',
+    'vde':      'NetdevVdeOptions',
+    'bridge':   'NetdevBridgeOptions',
+    'hubport':  'NetdevHubPortOptions',
+    'netmap':   'NetdevNetmapOptions',
+    'af-xdp':   { 'type': 'NetdevAFXDPOptions',
+                  'if': 'CONFIG_AF_XDP' },
+    'vhost-user': 'NetdevVhostUserOptions',
+    'vhost-vdpa': 'NetdevVhostVDPAOptions',
+    'vmnet-host': { 'type': 'NetdevVmnetHostOptions',
+                    'if': 'CONFIG_VMNET' },
+    'vmnet-shared': { 'type': 'NetdevVmnetSharedOptions',
+                      'if': 'CONFIG_VMNET' },
+    'vmnet-bridged': { 'type': 'NetdevVmnetBridgedOptions',
+                       'if': 'CONFIG_VMNET' } } }
+```
+
+因此，在编译时，`scripts/gen-api.py`会基于该内容在`${prefix}/qapi/qapi-types-net.h`中生成相关的数据结构，如下所示
+
+```h
+struct Netdev {
+    char *id;
+    NetClientDriver type;
+    union { /* union tag is @type */
+        NetLegacyNicOptions nic;
+        NetdevUserOptions user;
+        NetdevTapOptions tap;
+        NetdevL2TPv3Options l2tpv3;
+        NetdevSocketOptions socket;
+        NetdevStreamOptions stream;
+        NetdevDgramOptions dgram;
+        NetdevVdeOptions vde;
+        NetdevBridgeOptions bridge;
+        NetdevHubPortOptions hubport;
+        NetdevNetmapOptions netmap;
+#if defined(CONFIG_AF_XDP)
+        NetdevAFXDPOptions af_xdp;
+#endif /* defined(CONFIG_AF_XDP) */
+        NetdevVhostUserOptions vhost_user;
+        NetdevVhostVDPAOptions vhost_vdpa;
+#if defined(CONFIG_VMNET)
+        NetdevVmnetHostOptions vmnet_host;
+#endif /* defined(CONFIG_VMNET) */
+#if defined(CONFIG_VMNET)
+        NetdevVmnetSharedOptions vmnet_shared;
+#endif /* defined(CONFIG_VMNET) */
+#if defined(CONFIG_VMNET)
+        NetdevVmnetBridgedOptions vmnet_bridged;
+#endif /* defined(CONFIG_VMNET) */
+    } u;
+};
+```
+
+从而后续qemu代码可以通过引入该头文件来使用对应的数据结构
+
+###### visitor
+
+在qemu中，qmp命令参数、qemu命令行参数、数据结构深拷贝与释放等，都涉及到数据结构的访问与设置，如果逐个手写，会导致过多的重复代码。
+
+因此qemu提供了visitor机制：通过qapi-gen生成数据结构的上述所有操作的共同接口，即visit_type_Netdev()；然后根据不同的操作类型传入包含不同回调函数的visitor变量，从而实现不同的功能。
+
+具体的，qemu所有visitor类型包含[struct visitor](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/qapi/visitor-impl.h#L17-L135),如下所示
+
+```h
+/*
+ * There are four classes of visitors; setting the class determines
+ * how QAPI enums are visited, as well as what additional restrictions
+ * can be asserted.  The values are intentionally chosen so as to
+ * permit some assertions based on whether a given bit is set (that
+ * is, some assertions apply to input and clone visitors, some
+ * assertions apply to output and clone visitors).
+ */
+typedef enum VisitorType {
+    VISITOR_INPUT = 1,
+    VISITOR_OUTPUT = 2,
+    VISITOR_CLONE = 3,
+    VISITOR_DEALLOC = 4,
+} VisitorType;
+
+struct Visitor
+{
+    /*
+     * Only input visitors may fail!
+     */
+
+    /* Must be set to visit structs */
+    bool (*start_struct)(Visitor *v, const char *name, void **obj,
+                         size_t size, Error **errp);
+
+    /* Optional; intended for input visitors */
+    bool (*check_struct)(Visitor *v, Error **errp);
+
+    /* Must be set to visit structs */
+    void (*end_struct)(Visitor *v, void **obj);
+
+    /* Must be set; implementations may require @list to be non-null,
+     * but must document it. */
+    bool (*start_list)(Visitor *v, const char *name, GenericList **list,
+                       size_t size, Error **errp);
+
+    /* Must be set */
+    GenericList *(*next_list)(Visitor *v, GenericList *tail, size_t size);
+
+    /* Optional; intended for input visitors */
+    bool (*check_list)(Visitor *v, Error **errp);
+
+    /* Must be set */
+    void (*end_list)(Visitor *v, void **list);
+
+    /* Must be set by input and clone visitors to visit alternates */
+    bool (*start_alternate)(Visitor *v, const char *name,
+                            GenericAlternate **obj, size_t size,
+                            Error **errp);
+
+    /* Optional */
+    void (*end_alternate)(Visitor *v, void **obj);
+
+    /* Must be set */
+    bool (*type_int64)(Visitor *v, const char *name, int64_t *obj,
+                       Error **errp);
+
+    /* Must be set */
+    bool (*type_uint64)(Visitor *v, const char *name, uint64_t *obj,
+                        Error **errp);
+
+    /* Optional; fallback is type_uint64() */
+    bool (*type_size)(Visitor *v, const char *name, uint64_t *obj,
+                      Error **errp);
+
+    /* Must be set */
+    bool (*type_bool)(Visitor *v, const char *name, bool *obj, Error **errp);
+
+    /* Must be set */
+    bool (*type_str)(Visitor *v, const char *name, char **obj, Error **errp);
+
+    /* Must be set to visit numbers */
+    bool (*type_number)(Visitor *v, const char *name, double *obj,
+                        Error **errp);
+
+    /* Must be set to visit arbitrary QTypes */
+    bool (*type_any)(Visitor *v, const char *name, QObject **obj,
+                     Error **errp);
+
+    /* Must be set to visit explicit null values.  */
+    bool (*type_null)(Visitor *v, const char *name, QNull **obj,
+                      Error **errp);
+
+    /* Must be set for input visitors to visit structs, optional otherwise.
+       The core takes care of the return type in the public interface. */
+    void (*optional)(Visitor *v, const char *name, bool *present);
+
+    /* Optional */
+    bool (*policy_reject)(Visitor *v, const char *name,
+                          unsigned special_features, Error **errp);
+
+    /* Optional */
+    bool (*policy_skip)(Visitor *v, const char *name,
+                        unsigned special_features);
+
+    /* Must be set */
+    VisitorType type;
+
+    /* Optional */
+    struct CompatPolicy compat_policy;
+
+    /* Must be set for output visitors, optional otherwise. */
+    void (*complete)(Visitor *v, void *opaque);
+
+    /* Must be set */
+    void (*free)(Visitor *v);
+};
+```
+
+qemu中共有8种类型的visitor变量，如下所示
+
+| 数据结构 | 文件 | 描述 |
+| :-: | :-: | :-: |
+| [`struct QObjectInputVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qobject-input-visitor.c#L45-L57) | `qapi/qobject-input-visitor.c` | 把一个 QObject（QDict/QList）解析成 QAPI 的 数据结构 |
+| [`struct QObjectOutputVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qobject-output-visitor.c#L33-L39) | `qapi/qobject-output-visitor.c` | 把一个 QAPI 的 数据结构序列化成 QObject 树 |
+| [`struct StringInputVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/string-input-visitor.c#L43-L56) | `qapi/string-input-visitor.c` | 把单个字符串解析成标量或扁平整型列表 |
+| [`struct StringOutputVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/string-output-visitor.c#L55-L69) | `qapi/string-output-visitor.c` | 把标量或整型列表反向格式化成一行可读字符串 |
+| [`struct OptsVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/opts-visitor.c#L65-L99) | `qapi/opts-visitor.c` | 把扁平的 `QemuOpts`解析成 QAPI 结构体 |
+| [`struct QapiDeallocVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qapi-dealloc-visitor.c#L20-L23) | `qapi/qapi-dealloc-visitor.c` | 以后序遍历递归释放一个 QAPI 对象及其所有成员 |
+| [`struct QapiCloneVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qapi-clone-visitor.c#L17-L20) | `qapi/qapi-clone-visitor.c` | 对 QAPI 对象做深拷贝 |
+| [`struct ForwardFieldVisitor`](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qapi-forward-visitor.c#L27-L35) | `qapi/qapi-forward-visitor.c` | 把顶层字段名翻译成另一个名字后再转发 |
+
+
+
+
+##### qmp
+
+##### event
 
 ## 前端
 
