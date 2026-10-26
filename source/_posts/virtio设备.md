@@ -728,7 +728,183 @@ opts_end_struct(Visitor *v, void **obj)
 
 ##### qmp
 
+除了数据结构之外，qapi 的 `*.json` 中还会用 `{'command':*}` 规则定义 QMP 命令。这里仍以网卡后端为例：Qemu 在 [qapi/net.json](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/net.json#L56) 中定义了 `netdev_add` 命令，其参数正是上一节的 **struct Netdev**，如下所示
+
+```json
+##
+# @netdev_add:
+#
+# Add a network backend.
+#
+# Additional arguments depend on the type.
+#
+# Since: 0.14
+#
+# Errors:
+#     - If @type is not a valid network backend, DeviceNotFound
+#
+# Example:
+#
+#     -> { "execute": "netdev_add",
+#          "arguments": { "type": "user", "id": "netdev1",
+#                         "dnssearch": [ { "str": "example.org" } ] } }
+#     <- { "return": {} }
+##
+{ 'command': 'netdev_add', 'data': 'Netdev', 'boxed': true,
+  'allow-preconfig': true }
+```
+
+其中 `'data': 'Netdev'` 指定了该命令的参数类型；`'boxed': true` 表示生成的 C 函数直接接收一个装箱后的 **struct Netdev** 指针，而不是展开后的各个字段。
+
+在构建时 `scripts/qapi/commands.py` 会据此在 `${prefix}/qapi/qapi-commands-net.c` 中生成对应的 qmp 处理框架函数 `qmp_marshal_netdev_add()`，如下所示
+
+```c
+void qmp_marshal_netdev_add(QDict *args, QObject **ret, Error **errp)
+{
+    Error *err = NULL;
+    bool ok = false;
+    Visitor *v;
+    Netdev arg = {0};
+
+    v = qobject_input_visitor_new_qmp(QOBJECT(args));
+    if (!visit_start_struct(v, NULL, NULL, 0, errp)) {
+        goto out;
+    }
+    if (visit_type_Netdev_members(v, &arg, errp)) {
+        ok = visit_check_struct(v, errp);
+    }
+    visit_end_struct(v, NULL);
+    if (!ok) {
+        goto out;
+    }
+
+    if (trace_event_get_state_backends(TRACE_QMP_ENTER_NETDEV_ADD)) {
+        g_autoptr(GString) req_json = qobject_to_json(QOBJECT(args));
+
+        trace_qmp_enter_netdev_add(req_json->str);
+    }
+
+    qmp_netdev_add(&arg, &err);
+    if (err) {
+        trace_qmp_exit_netdev_add(error_get_pretty(err), false);
+        error_propagate(errp, err);
+        goto out;
+    }
+
+    trace_qmp_exit_netdev_add("{}", true);
+
+out:
+    visit_free(v);
+    v = qapi_dealloc_visitor_new();
+    visit_start_struct(v, NULL, NULL, 0, NULL);
+    visit_type_Netdev_members(v, &arg, NULL);
+    visit_end_struct(v, NULL);
+    visit_free(v);
+}
+```
+
+可以看到，它同样借助 visitor 机制完成工作：先创建 input visitor，把 QMP 请求中的 **QDict** 反序列化为 **struct Netdev**；解析成功后调用真正的处理函数 [**qmp_netdev_add()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1444)。因此在 Qemu 中新增一条 QMP 命令时，只需要在 schema 中声明命令、再实现对应的 `qmp_*()` 函数即可，参数解析等框架代码全都由 qapi-gen 自动生成。
+
+不过 marshal 函数本身并不会被自动调用，它需要先注册进 QMP 的命令表。为此 `scripts/qapi/commands.py` 会在 `${prefix}/qapi/qapi-init-commands.c` 中生成 `qmp_init_marshal()`，由它调用 [**qmp_register_command()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-registry.c#L18) 把各命令连同其选项注册到全局链表 `qmp_commands` 中，如下所示。
+
+```c
+void qmp_init_marshal(QmpCommandList *cmds)
+{
+    QTAILQ_INIT(cmds);
+
+    qmp_register_command(cmds, "netdev_add",
+                         qmp_marshal_netdev_add, QCO_ALLOW_PRECONFIG, 0);
+    ...
+}
+```
+
+此后 QMP 客户端发来的请求会由 [**monitor_qmp_dispatch()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/monitor/qmp.c#L163) 交给 [**qmp_dispatch()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-dispatch.c#L137)：它先用 [**qmp_find_command()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-registry.c#L35) 按命令名查表，再调用查到的 `cmd->fn()`，也就是前面生成的 marshal 函数，如下所示。
+
+```c
+// qapi/qmp-dispatch.c
+cmd = qmp_find_command(cmds, command);
+if (cmd == NULL) {
+    error_set(&err, ERROR_CLASS_COMMAND_NOT_FOUND,
+              "The command %s has not been found", command);
+    goto out;
+}
+...
+monitor_set_cur(qemu_coroutine_self(), cur_mon);
+cmd->fn(args, &ret, &err);
+monitor_set_cur(qemu_coroutine_self(), NULL);
+```
+
+至此，一条 QMP 命令的完整链路就已经清晰了：JSON 请求 → `qmp_dispatch()` 查表 → `qmp_marshal_netdev_add()` 反序列化 → `qmp_netdev_add()` 实际处理。
+
 ##### event
+
+与 qmp 命令相对，qapi 的 `*.json` 中还会用 `{'event':*}` 规则定义由 Qemu 主动上报的事件。这里仍以网卡后端为例：Qemu 在 [qapi/net.json](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/net.json#L991) 中定义了 **NETDEV_STREAM_CONNECTED** 事件，如下所示
+
+```json
+##
+# @NETDEV_STREAM_CONNECTED:
+#
+# Emitted when the netdev stream backend is connected
+#
+# @netdev-id: QEMU netdev id that is connected
+#
+# @addr: The destination address
+#
+# Since: 7.2
+#
+# Examples:
+#
+#     <- { "event": "NETDEV_STREAM_CONNECTED",
+#          "data": { "netdev-id": "netdev0",
+#                    "addr": { "port": "47666", "ipv6": true,
+#                              "host": "::1", "type": "inet" } },
+#          "timestamp": { "seconds": 1666269863, "microseconds": 311222 } }
+#
+#     <- { "event": "NETDEV_STREAM_CONNECTED",
+#          "data": { "netdev-id": "netdev0",
+#                    "addr": { "path": "/tmp/qemu0", "type": "unix" } },
+#          "timestamp": { "seconds": 1666269706, "microseconds": 413651 } }
+##
+{ 'event': 'NETDEV_STREAM_CONNECTED',
+  'data': { 'netdev-id': 'str',
+            'addr': 'SocketAddress' } }
+```
+
+在构建时 `scripts/qapi/events.py` 会据此在 `${prefix}/qapi/qapi-events-net.c` 中生成对应的发送函数 `qapi_event_send_netdev_stream_connected()`，如下所示
+
+```c
+void qapi_event_send_netdev_stream_connected(const char *netdev_id, SocketAddress *addr)
+{
+    QDict *qmp;
+    QObject *obj;
+    Visitor *v;
+    q_obj_NETDEV_STREAM_CONNECTED_arg param = {
+        (char *)netdev_id, addr
+    };
+
+    qmp = qmp_event_build_dict("NETDEV_STREAM_CONNECTED");
+
+    v = qobject_output_visitor_new_qmp(&obj);
+
+    visit_start_struct(v, "NETDEV_STREAM_CONNECTED", NULL, 0, &error_abort);
+    visit_type_q_obj_NETDEV_STREAM_CONNECTED_arg_members(v, &param, &error_abort);
+    visit_check_struct(v, &error_abort);
+    visit_end_struct(v, NULL);
+
+    visit_complete(v, &obj);
+    if (qdict_size(qobject_to(QDict, obj))) {
+        qdict_put_obj(qmp, "data", obj);
+    } else {
+        qobject_unref(obj);
+    }
+    qapi_event_emit(QAPI_EVENT_NETDEV_STREAM_CONNECTED, qmp);
+
+    visit_free(v);
+    qobject_unref(qmp);
+}
+```
+
+可以看到，它的数据流向与 qmp 恰好相反：先创建 output visitor，把装箱参数 **q_obj_NETDEV_STREAM_CONNECTED_arg** 序列化成 **QObject**；再用 [**qmp_event_build_dict()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-event.c#L36) 造出event的骨架 **QDict**，把序列化结果挂到它的 `data` 键上；最后调用 [**qapi_event_emit()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/monitor/monitor.c#L415) 发送。因此上报一个事件时，Qemu 代码只需要调用生成的 `qapi_event_send_*()` 函数，事件对象的组装与发送逻辑同样由 qapi-gen 自动生成。
 
 ## 前端
 
