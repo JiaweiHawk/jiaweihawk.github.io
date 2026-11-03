@@ -906,8 +906,86 @@ void qapi_event_send_netdev_stream_connected(const char *netdev_id, SocketAddres
 
 可以看到，它的数据流向与 qmp 恰好相反：先创建 output visitor，把装箱参数 **q_obj_NETDEV_STREAM_CONNECTED_arg** 序列化成 **QObject**；再用 [**qmp_event_build_dict()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-event.c#L36) 造出event的骨架 **QDict**，把序列化结果挂到它的 `data` 键上；最后调用 [**qapi_event_emit()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/monitor/monitor.c#L415) 发送。因此上报一个事件时，Qemu 代码只需要调用生成的 `qapi_event_send_*()` 函数，事件对象的组装与发送逻辑同样由 qapi-gen 自动生成。
 
+## 后端
+
 ## 前端
 
-## 后端
+## 启动过程
+
+这里详细介绍一下`-device virtio-net-pci,netdev=hostnet0 -netdev tap,id=hostnet0`命令行的网卡的启动过程
+
+### 创建后端
+
+由于前端依赖于后端，所以后端往往先于前端构建。qemu会在[**qemu_create_late_backends()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/system/vl.c#L2005)中创建大部分设备后端，其中调用[**net_init_clients()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1848)创建网卡后端，如下所示
+
+```c
+//#0  net_init_clients () at ../net/net.c:1851
+//#1  0x0000555555b32fb0 in qemu_create_late_backends () at ../system/vl.c:2011
+//#2  0x0000555555b37745 in qemu_init (argc=0x26, argv=0x7fffffffd968)
+//    at ../system/vl.c:3712
+//#3  0x0000555555d92c58 in main (argc=0x26, argv=0x7fffffffd968)
+//    at ../system/main.c:47
+//#4  0x00007ffff7b62ca8 in __libc_start_call_main (
+//    main=main@entry=0x555555d92c38 <main>, argc=argc@entry=0x26, 
+//    argv=argv@entry=0x7fffffffd968)
+//    at ../sysdeps/nptl/libc_start_call_main.h:58
+//#5  0x00007ffff7b62d65 in __libc_start_main_impl (main=0x555555d92c38 <main>, 
+//    argc=0x26, argv=0x7fffffffd968, init=<optimized out>, 
+//    fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd958)
+//    at ../csu/libc-start.c:360
+//#6  0x000055555584b661 in _start ()
+void net_init_clients(void)
+{
+    net_change_state_entry =
+        qemu_add_vm_change_state_handler(net_vm_change_state_handler, NULL);
+
+    QTAILQ_INIT(&net_clients);
+
+    netdev_init_modern();
+
+    qemu_opts_foreach(qemu_find_opts("netdev"), net_init_netdev, NULL,
+                      &error_fatal);
+
+    qemu_opts_foreach(qemu_find_opts("nic"), net_param_nic, NULL,
+                      &error_fatal);
+
+    qemu_opts_foreach(qemu_find_opts("net"), net_init_client, NULL,
+                      &error_fatal);
+}
+```
+
+可以看到，其会调用[**net_init_netdev()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1739)来处理所有**netdev**的后端选项，即`-netdev tap,id=hostnet0`,如下所示
+
+```c
+static int net_init_netdev(void *dummy, QemuOpts *opts, Error **errp)
+{
+    const char *type = qemu_opt_get(opts, "type");
+
+    if (type && is_help_option(type)) {
+        show_netdevs();
+        exit(0);
+    }
+    return net_client_init(opts, true, errp);
+}
+
+static int net_client_init(QemuOpts *opts, bool is_netdev, Error **errp)
+{
+    ...
+    Visitor *v = opts_visitor_new(opts);
+    ...
+    if (visit_type_Netdev(v, NULL, &object, errp)) {
+        ret = net_client_init1(object, is_netdev, errp);
+    }
+
+    qapi_free_Netdev(object);
+
+out:
+    g_strfreev(substrings);
+    visit_free(v);
+    return ret;
+}
+```
+
+## 前端
 
 # 参考
