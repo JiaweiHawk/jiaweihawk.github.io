@@ -906,9 +906,13 @@ void qapi_event_send_netdev_stream_connected(const char *netdev_id, SocketAddres
 
 可以看到，它的数据流向与 qmp 恰好相反：先创建 output visitor，把装箱参数 **q_obj_NETDEV_STREAM_CONNECTED_arg** 序列化成 **QObject**；再用 [**qmp_event_build_dict()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-event.c#L36) 造出event的骨架 **QDict**，把序列化结果挂到它的 `data` 键上；最后调用 [**qapi_event_emit()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/monitor/monitor.c#L415) 发送。因此上报一个事件时，Qemu 代码只需要调用生成的 `qapi_event_send_*()` 函数，事件对象的组装与发送逻辑同样由 qapi-gen 自动生成。
 
+## 前端
+
+**VirtIONetPCI**和**VirtIONet**
+
 ## 后端
 
-## 前端
+**NICState**和**TAPState**
 
 ## 启动过程
 
@@ -985,7 +989,5 @@ out:
     return ret;
 }
 ```
-
-## 前端
 
 # 参考
