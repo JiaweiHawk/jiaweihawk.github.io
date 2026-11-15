@@ -906,13 +906,382 @@ void qapi_event_send_netdev_stream_connected(const char *netdev_id, SocketAddres
 
 可以看到，它的数据流向与 qmp 恰好相反：先创建 output visitor，把装箱参数 **q_obj_NETDEV_STREAM_CONNECTED_arg** 序列化成 **QObject**；再用 [**qmp_event_build_dict()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/qapi/qmp-event.c#L36) 造出event的骨架 **QDict**，把序列化结果挂到它的 `data` 键上；最后调用 [**qapi_event_emit()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/monitor/monitor.c#L415) 发送。因此上报一个事件时，Qemu 代码只需要调用生成的 `qapi_event_send_*()` 函数，事件对象的组装与发送逻辑同样由 qapi-gen 自动生成。
 
-## 前端
+## 数据结构
 
-**VirtIONetPCI**和**VirtIONet**
+`-device virtio-net-pci,netdev=hostnet0 -netdev tap,id=hostnet0` 在 Qemu 内部对应三组数据结构：
 
-## 后端
+- **前端设备**：[**struct VirtIONetPCI**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L36) 是 PCI 外壳，[**struct VirtIONet**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/virtio/virtio-net.h#L166) 承载 virtio 网卡语义
+- **后端设备**：[**struct TAPState**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/tap.c#L50) 把 host 上的 tap 文件描述符包装成一个网卡后端
+- **公共抽象**：[**struct NetClientState**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/net/net.h#L103) 描述一个网络节点，[**struct NetClientInfo**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/net/net.h#L73) 是该节点的行为函数表
 
-**NICState**和**TAPState**
+前后端之间并不存在直接的成员指针：两者都只认识 `NetClientState`，先通过 `nc->peer` 找到对端节点，再通过 `nc->info` 调用对端的行为回调。这是理解后文所有代码的前提。
+
+### 公共抽象
+
+#### struct NetClientState
+
+前端有 `VirtIONet`，后端有 `TAPState`，两者的类型完全不同、也不能直接互操作。qemu 的做法是把每一个参与数据收发的节点抽象为 [**struct NetClientState**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/net/net.h#L103)，前端与后端各持有一个并互为 peer：
+
+```c
+struct NetClientState {
+    NetClientInfo *info;
+    int link_down;
+    QTAILQ_ENTRY(NetClientState) next;
+    NetClientState *peer;
+    NetQueue *incoming_queue;
+    char *model;
+    char *name;
+    char info_str[256];
+    unsigned receive_disabled : 1;
+    NetClientDestructor *destructor;
+    unsigned int queue_index;
+    unsigned rxfilter_notify_enabled:1;
+    int vring_enable;
+    int vnet_hdr_len;
+    bool is_netdev;
+    bool do_not_pad; /* do not pad to the minimum ethernet frame length */
+    bool is_datapath;
+    QTAILQ_HEAD(, NetFilterState) filters;
+};
+```
+
+其中几个关键字段：
+
+- `info`：指向 `NetClientInfo` 行为表，决定这个节点“是什么”（NIC/TAP 等）以及“能做什么”
+- `peer`：指向配对的对端节点，是前后端关联的唯一桥梁
+
+#### struct NetClientInfo
+
+[**struct NetClientInfo**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/net/net.h#L73) 是一张行为函数表（本质是函数指针集合，作用与 C++ 的虚表类似），描述该节点的能力：
+
+```c
+typedef struct NetClientInfo {
+    NetClientDriver type;
+    size_t size;
+    NetReceive *receive;
+    NetReceive *receive_raw;
+    NetReceiveIOV *receive_iov;
+    NetCanReceive *can_receive;
+    NetStart *start;
+    NetLoad *load;
+    NetStop *stop;
+    NetCleanup *cleanup;
+    LinkStatusChanged *link_status_changed;
+    QueryRxFilter *query_rx_filter;
+    NetPoll *poll;
+    HasUfo *has_ufo;
+    HasUso *has_uso;
+    HasVnetHdr *has_vnet_hdr;
+    HasVnetHdrLen *has_vnet_hdr_len;
+    GetUsingVnetHdr *get_using_vnet_hdr;
+    UsingVnetHdr *using_vnet_hdr;
+    SetOffload *set_offload;
+    GetVnetHdrLen *get_vnet_hdr_len;
+    SetVnetHdrLen *set_vnet_hdr_len;
+    SetVnetLE *set_vnet_le;
+    SetVnetBE *set_vnet_be;
+    NetAnnounce *announce;
+    SetSteeringEBPF *set_steering_ebpf;
+    NetCheckPeerType *check_peer_type;
+} NetClientInfo;
+```
+
+其中最重要的是收包方向的两个回调 **receive**/**receive_iov**，前后端正是靠它们完成数据面的互通：guest 发包时，前端节点通过 `nc->peer` 找到后端节点，调用后端 `info->receive_iov`，把报文交给后端处理；反过来，host 侧有报文到达时，后端节点同样通过 `peer` 调用前端 `info->receive`，把报文送进 guest。
+
+### 前端
+
+#### struct VirtIONetPCI
+
+virtio 前端通常由“PCI 外壳 + virtio 设备”两层拼成，`virtio-net-pci` 也不例外。它的类型信息由 [**virtio_net_pci_info**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L93) 描述:
+
+```c
+static const VirtioPCIDeviceTypeInfo virtio_net_pci_info = {
+    .base_name             = TYPE_VIRTIO_NET_PCI,
+    .generic_name          = "virtio-net-pci",
+    .transitional_name     = "virtio-net-pci-transitional",
+    .non_transitional_name = "virtio-net-pci-non-transitional",
+    .instance_size = sizeof(VirtIONetPCI),
+    .instance_init = virtio_net_pci_instance_init,
+    .class_init    = virtio_net_pci_class_init,
+};
+
+struct VirtIONetPCI {
+    VirtIOPCIProxy parent_obj;
+    VirtIONet vdev;
+};
+```
+
+其两个成员分工非常清晰：
+
+- **parent_obj（struct VirtIOPCIProxy）**：virtio 传输层（transport）的 PCI 实现，把 virtio 的通用配置、通知等寄存器映射成 PCI 的 BAR，guest 中的 virtio-net-pci 驱动正是通过这些 BAR 与设备交互
+- **vdev（struct VirtIONet）**：真正的 virtio 网卡设备，管理收发 vq、MAC、多队列等设备语义，数据面的收发包最终由它交给网卡后端
+
+#### struct VirtIOPCIProxy
+
+[**struct VirtIOPCIProxy**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/virtio/virtio-pci.h#L134) 结构如下所示
+
+```c
+struct VirtIOPCIProxy {
+    PCIDevice pci_dev;
+    MemoryRegion bar;
+    union {
+        struct {
+            VirtIOPCIRegion common;
+            VirtIOPCIRegion isr;
+            VirtIOPCIRegion device;
+            VirtIOPCIRegion notify;
+            VirtIOPCIRegion notify_pio;
+        };
+        VirtIOPCIRegion regs[5];
+    };
+    VirtIOPCIRegion lm;
+    MemoryRegion modern_bar;
+    MemoryRegion io_bar;
+    uint32_t legacy_io_bar_idx;
+    uint32_t msix_bar_idx;
+    uint32_t modern_io_bar_idx;
+    uint32_t modern_mem_bar_idx;
+    int config_cap;
+    uint32_t flags;
+    bool disable_modern;
+    bool ignore_backend_features;
+    OnOffAuto disable_legacy;
+    /* Transitional device id */
+    uint16_t trans_devid;
+    uint32_t class_code;
+    uint32_t nvectors;
+    uint32_t dfselect;
+    uint32_t gfselect;
+    uint32_t guest_features[2];
+    VirtIOPCIQueue vqs[VIRTIO_QUEUE_MAX];
+
+    VirtIOIRQFD *vector_irqfd;
+    int nvqs_with_notifiers;
+    VirtioBusState bus;
+};
+```
+
+它本质上是 virtio 传输层在 PCI 总线上的实现，几个关键字段：
+
+- `pci_dev`：内嵌的 **PCIDevice**，QOM 对象树的父对象，设备以它为主体挂到 guest 的 PCI 总线上
+- `modern_bar`/`io_bar`：作为 BAR 暴露给 guest 的 **MemoryRegion**，virtio modern 规范的 common、isr、device、notify 等寄存器组（即 `regs[]` 中的各 region）就映射在这里
+- `vqs[]`：每个 virtqueue 在 PCI 传输层的状态，例如 guest 侧 avail/used 环的地址与通知方式
+- `nvectors`/`vector_irqfd`：MSI-X 中断向量与 virtqueue 之间的映射
+- `bus`：内嵌的 **VirtioBusState**。[**virtio_net_pci_realize()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L49) 正是通过 `qdev_realize(vdev, BUS(&vpci_dev->bus), ...)` 把内嵌的 `VirtIONet` 挂上这条总线，"PCI 外壳 + virtio 设备"就此组合完成
+
+#### struct VirtIONet
+
+而[**struct VirtIONet**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/virtio/virtio-net.h#L166)结构如下所示：
+
+```c
+struct VirtIONet {
+    VirtIODevice parent_obj;
+    uint8_t mac[ETH_ALEN];
+    uint16_t status;
+    VirtIONetQueue *vqs;
+    VirtQueue *ctrl_vq;
+    NICState *nic;
+    /* RSC Chains - temporary storage of coalesced data,
+       all these data are lost in case of migration */
+    QTAILQ_HEAD(, VirtioNetRscChain) rsc_chains;
+    uint32_t tx_timeout;
+    int32_t tx_burst;
+    uint32_t has_vnet_hdr;
+    size_t host_hdr_len;
+    size_t guest_hdr_len;
+    uint64_t host_features;
+    uint32_t rsc_timeout;
+    uint8_t rsc4_enabled;
+    uint8_t rsc6_enabled;
+    uint8_t has_ufo;
+    uint32_t mergeable_rx_bufs;
+    uint8_t promisc;
+    uint8_t allmulti;
+    uint8_t alluni;
+    uint8_t nomulti;
+    uint8_t nouni;
+    uint8_t nobcast;
+    uint8_t vhost_started;
+    struct {
+        uint32_t in_use;
+        uint32_t first_multi;
+        uint8_t multi_overflow;
+        uint8_t uni_overflow;
+        uint8_t *macs;
+    } mac_table;
+    uint32_t *vlans;
+    virtio_net_conf net_conf;
+    NICConf nic_conf;
+    DeviceState *qdev;
+    int multiqueue;
+    uint16_t max_queue_pairs;
+    uint16_t curr_queue_pairs;
+    uint16_t max_ncs;
+    size_t config_size;
+    char *netclient_name;
+    char *netclient_type;
+    uint64_t curr_guest_offloads;
+    /* used on saved state restore phase to preserve the curr_guest_offloads */
+    uint64_t saved_guest_offloads;
+    AnnounceTimer announce_timer;
+    bool needs_vnet_hdr_swap;
+    bool mtu_bypass_backend;
+    /* primary failover device is hidden*/
+    bool failover_primary_hidden;
+    bool failover;
+    DeviceListener primary_listener;
+    QDict *primary_opts;
+    bool primary_opts_from_json;
+    NotifierWithReturn migration_state;
+    VirtioNetRssData rss_data;
+    struct NetRxPkt *rx_pkt;
+    struct EBPFRSSContext ebpf_rss;
+    uint32_t nr_ebpf_rss_fds;
+    char **ebpf_rss_fds;
+};
+```
+
+注意 `VirtIONet` 持有的不是单个 `NetClientState`：多队列场景下，每个收发队列各对应一个前端节点，这些节点统一聚合在 [**struct NICState**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/net/net.h#L126) 中，由 `VirtIONet` 的 `nic` 成员持有：
+
+```c
+typedef struct NICState {
+    NetClientState *ncs;
+    NICConf *conf;
+    MemReentrancyGuard *reentrancy_guard;
+    void *opaque;
+    bool peer_deleted;
+} NICState;
+```
+
+每个队列前端节点的行为由 [**net_virtio_info**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L3418) 描述：
+
+```c
+static NetClientInfo net_virtio_info = {
+    .type = NET_CLIENT_DRIVER_NIC,
+    .size = sizeof(NICState),
+    .can_receive = virtio_net_can_receive,
+    .receive = virtio_net_receive,
+    .link_status_changed = virtio_net_set_link_status,
+    .query_rx_filter = virtio_net_query_rxfilter,
+    .announce = virtio_net_announce,
+};
+```
+
+当 host 侧有报文到达 tap 设备时，后端最终通过 peer 调用到前端的 [**virtio_net_receive()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/net/virtio-net.c#L2691)，把报文写入 guest 预先挂到接收 vq 的缓冲中并通知guest：
+
+```c
+//#0  virtio_net_receive (nc=0x555557da3b08, buf=0x55555711d8bc "\001", size=0xc3) at ../hw/net/virtio-net.c:2694
+//#1  0x0000555555b8385f in nc_sendv_compat (nc=0x555557da3b08, iov=0x7fffffffd460, iovcnt=0x1, flags=0x0) at ../net/net.c:810
+//#2  0x0000555555b8398c in qemu_deliver_packet_iov (sender=0x55555711d2c0, flags=0x0, iov=0x7fffffffd460, iovcnt=0x1, opaque=0x555557da3b08) at ../net/net.c:847
+//#3  0x0000555555b8734b in qemu_net_queue_deliver (queue=0x555557da3cd0, sender=0x55555711d2c0, flags=0x0, data=0x55555711d8bc "\001", size=0xc3)
+//    at ../net/queue.c:164
+//#4  0x0000555555b87532 in qemu_net_queue_send (queue=0x555557da3cd0, sender=0x55555711d2c0, flags=0x0, data=0x55555711d8bc "\001", size=0xc3, 
+//    sent_cb=0x555555b8ca56 <tap_send_completed>) at ../net/queue.c:221
+//#5  0x0000555555b835dc in qemu_send_packet_async_with_flags (sender=0x55555711d2c0, flags=0x0, buf=0x55555711d8bc "\001", size=0xc3, 
+//    sent_cb=0x555555b8ca56 <tap_send_completed>) at ../net/net.c:745
+//#6  0x0000555555b83622 in qemu_send_packet_async (sender=0x55555711d2c0, buf=0x55555711d8bc "\001", size=0xc3, sent_cb=0x555555b8ca56 <tap_send_completed>)
+//    at ../net/net.c:752
+//#7  0x0000555555b8cba9 in tap_send (opaque=0x55555711d2c0) at ../net/tap.c:212
+//#8  0x0000555555f5eb47 in aio_dispatch_handler (ctx=0x555556ef5be0, node=0x55555711c100) at ../util/aio-posix.c:372
+//#9  0x0000555555f5ed08 in aio_dispatch_handlers (ctx=0x555556ef5be0) at ../util/aio-posix.c:414
+//#10 0x0000555555f5ed50 in aio_dispatch (ctx=0x555556ef5be0) at ../util/aio-posix.c:424
+//#11 0x0000555555f7c424 in aio_ctx_dispatch (source=0x555556ef5be0, callback=0x0, user_data=0x0) at ../util/async.c:360
+//#12 0x00007ffff7d8b485 in ?? () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#13 0x00007ffff7d8dd78 in g_main_context_dispatch () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#14 0x0000555555f7d9b6 in glib_pollfds_poll () at ../util/main-loop.c:287
+//#15 0x0000555555f7da44 in os_host_main_loop_wait (timeout=0x1c002b74) at ../util/main-loop.c:310
+//#16 0x0000555555f7db64 in main_loop_wait (nonblocking=0x0) at ../util/main-loop.c:589
+//#17 0x0000555555b2e067 in qemu_main_loop () at ../system/runstate.c:783
+//#18 0x0000555555d92c24 in qemu_default_main () at ../system/main.c:37
+//#19 0x0000555555d92c61 in main (argc=0x26, argv=0x7fffffffd968) at ../system/main.c:48
+//#20 0x00007ffff7b62ca8 in __libc_start_call_main (main=main@entry=0x555555d92c38 <main>, argc=argc@entry=0x26, argv=argv@entry=0x7fffffffd968)
+//    at ../sysdeps/nptl/libc_start_call_main.h:58
+//#21 0x00007ffff7b62d65 in __libc_start_main_impl (main=0x555555d92c38 <main>, argc=0x26, argv=0x7fffffffd968, init=<optimized out>, fini=<optimized out>, 
+//    rtld_fini=<optimized out>, stack_end=0x7fffffffd958) at ../csu/libc-start.c:360
+//#22 0x000055555584b661 in _start ()
+```
+
+### 后端
+
+qemu 会用 **TAPState** 来表示 tap 后端，从而将 host 上的 tun/tap 字符设备包装成一个 **struct NetClientState** 节点。具体的，[**struct TAPState**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/tap.c#L50) 如下所示
+
+```c
+typedef struct TAPState {
+    NetClientState nc;
+    int fd;
+    char down_script[1024];
+    char down_script_arg[128];
+    uint8_t buf[NET_BUFSIZE];
+    bool read_poll;
+    bool write_poll;
+    bool using_vnet_hdr;
+    bool has_ufo;
+    bool has_uso;
+    bool enabled;
+    VHostNetState *vhost_net;
+    unsigned host_vnet_hdr_len;
+    Notifier exit;
+} TAPState;
+```
+
+`nc` 同样是首成员，这一布局让 qemu 在只持有 `NetClientState *` 时，可以用 `DO_UPCAST(TAPState, nc, nc)`（本质是 `container_of`）反推出整个 `TAPState`。
+
+而后端节点的行为由 `nc->info` 指向的 [**net_tap_info**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/tap.c#L389) 提供
+
+```c
+static NetClientInfo net_tap_info = {
+    .type = NET_CLIENT_DRIVER_TAP,
+    .size = sizeof(TAPState),
+    .receive = tap_receive,
+    .receive_raw = tap_receive_raw,
+    .receive_iov = tap_receive_iov,
+    .poll = tap_poll,
+    .cleanup = tap_cleanup,
+    .has_ufo = tap_has_ufo,
+    .has_uso = tap_has_uso,
+    .has_vnet_hdr = tap_has_vnet_hdr,
+    .has_vnet_hdr_len = tap_has_vnet_hdr_len,
+    .get_using_vnet_hdr = tap_get_using_vnet_hdr,
+    .using_vnet_hdr = tap_using_vnet_hdr,
+    .set_offload = tap_set_offload,
+    .get_vnet_hdr_len = tap_get_vnet_hdr_len,
+    .set_vnet_hdr_len = tap_set_vnet_hdr_len,
+    .set_vnet_le = tap_set_vnet_le,
+    .set_vnet_be = tap_set_vnet_be,
+    .set_steering_ebpf = tap_set_steering_ebpf,
+};
+```
+
+当 guest 驱动向外发包时，前端最终通过 peer 调用到后端的 [**tap_receive_iov()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/tap.c#L116)，后者经 `tap_write_packet()` 用 `writev()` 把报文写入 tap 设备的 fd，报文由此进入 host 的网络协议栈：
+
+```c
+//#0  tap_receive_iov (nc=0x55555711d2c0, iov=0x555557b6b630, iovcnt=0x1) at ../net/tap.c:119
+//#1  0x0000555555b83971 in qemu_deliver_packet_iov (sender=0x555557da3b08, flags=0x0, iov=0x555557b6b630, iovcnt=0x1, opaque=0x55555711d2c0) at ../net/net.c:845
+//#2  0x0000555555b873c8 in qemu_net_queue_deliver_iov (queue=0x555556efa2f0, sender=0x555557da3b08, flags=0x0, iov=0x555557b6b630, iovcnt=0x1) at ../net/queue.c:179
+//#3  0x0000555555b87617 in qemu_net_queue_send_iov (queue=0x555556efa2f0, sender=0x555557da3b08, flags=0x0, iov=0x555557b6b630, iovcnt=0x1, 
+//    sent_cb=0x555555ccc4e2 <virtio_net_tx_complete>) at ../net/queue.c:246
+//#4  0x0000555555b83af9 in qemu_sendv_packet_async (sender=0x555557da3b08, iov=0x555557b6b630, iovcnt=0x1, sent_cb=0x555555ccc4e2 <virtio_net_tx_complete>)
+//    at ../net/net.c:892
+//#5  0x0000555555ccca15 in virtio_net_flush_tx (q=0x555556ef8dc0) at ../hw/net/virtio-net.c:2812
+//#6  0x0000555555cccf5d in virtio_net_tx_bh (opaque=0x555556ef8dc0) at ../hw/net/virtio-net.c:2960
+//#7  0x0000555555f7be7c in aio_bh_call (bh=0x555556ef8d40) at ../util/async.c:171
+//#8  0x0000555555f7bfb5 in aio_bh_poll (ctx=0x555556ef9a50) at ../util/async.c:218
+//#9  0x0000555555f5ed44 in aio_dispatch (ctx=0x555556ef9a50) at ../util/aio-posix.c:423
+//#10 0x0000555555f7c424 in aio_ctx_dispatch (source=0x555556ef9a50, callback=0x0, user_data=0x0) at ../util/async.c:360
+//#11 0x00007ffff7d8b485 in ?? () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#12 0x00007ffff7d8dd78 in g_main_context_dispatch () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+//#13 0x0000555555f7d9b6 in glib_pollfds_poll () at ../util/main-loop.c:287
+//#14 0x0000555555f7da44 in os_host_main_loop_wait (timeout=0x0) at ../util/main-loop.c:310
+//#15 0x0000555555f7db64 in main_loop_wait (nonblocking=0x0) at ../util/main-loop.c:589
+//#16 0x0000555555b2e067 in qemu_main_loop () at ../system/runstate.c:783
+//#17 0x0000555555d92c24 in qemu_default_main () at ../system/main.c:37
+//#18 0x0000555555d92c61 in main (argc=0x26, argv=0x7fffffffd968) at ../system/main.c:48
+//#19 0x00007ffff7b62ca8 in __libc_start_call_main (main=main@entry=0x555555d92c38 <main>, argc=argc@entry=0x26, argv=argv@entry=0x7fffffffd968)
+//    at ../sysdeps/nptl/libc_start_call_main.h:58
+//#20 0x00007ffff7b62d65 in __libc_start_main_impl (main=0x555555d92c38 <main>, argc=0x26, argv=0x7fffffffd968, init=<optimized out>, fini=<optimized out>, 
+//    rtld_fini=<optimized out>, stack_end=0x7fffffffd958) at ../csu/libc-start.c:360
+//#21 0x000055555584b661 in _start ()
+```
 
 ## 启动过程
 
