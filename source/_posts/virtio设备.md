@@ -21,7 +21,7 @@ categories: ['虚拟化']
 -device virtio-net-pci,netdev=hostnet0
 
 # 后端：host 使用 tap 设备处理 guest 中 virtio 网卡的数据
--netdev tap,id=hostnet0
+-netdev tap,id=hostnet0,ifname=tap_for_l1
 ```
 
 ## 框架
@@ -908,7 +908,7 @@ void qapi_event_send_netdev_stream_connected(const char *netdev_id, SocketAddres
 
 ## 数据结构
 
-`-device virtio-net-pci,netdev=hostnet0 -netdev tap,id=hostnet0` 在 Qemu 内部对应三组数据结构：
+`-device virtio-net-pci,netdev=hostnet0 -netdev tap,id=hostnet0,ifname=tap_for_l1` 在 Qemu 内部对应三组数据结构：
 
 - **前端设备**：[**struct VirtIONetPCI**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/hw/virtio/virtio-net-pci.c#L36) 是 PCI 外壳，[**struct VirtIONet**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/include/hw/virtio/virtio-net.h#L166) 承载 virtio 网卡语义
 - **后端设备**：[**struct TAPState**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/tap.c#L50) 把 host 上的 tap 文件描述符包装成一个网卡后端
@@ -1285,7 +1285,7 @@ static NetClientInfo net_tap_info = {
 
 ## 启动过程
 
-这里详细介绍一下`-device virtio-net-pci,netdev=hostnet0 -netdev tap,id=hostnet0`命令行的网卡的启动过程
+这里详细介绍一下`-device virtio-net-pci,netdev=hostnet0 -netdev tap,id=hostnet0,ifname=tap_for_l1`命令行的网卡的启动过程
 
 ### 创建后端
 
@@ -1327,7 +1327,7 @@ void net_init_clients(void)
 }
 ```
 
-可以看到，其会调用[**net_init_netdev()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1739)来处理所有**netdev**的后端选项，即`-netdev tap,id=hostnet0`,如下所示
+可以看到，其会调用[**net_init_netdev()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1739)来处理所有**netdev**的后端选项，即`-netdev tap,id=hostnet0,ifname=tap_for_l1`,如下所示
 
 ```c
 static int net_init_netdev(void *dummy, QemuOpts *opts, Error **errp)
@@ -1356,6 +1356,149 @@ out:
     g_strfreev(substrings);
     visit_free(v);
     return ret;
+}
+```
+
+其核心逻辑在[**net_client_init1()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/net.c#L1279),会根据netdev类型调用对应的初始化回调函数,如下所示
+
+```c
+static int (* const net_client_init_fun[NET_CLIENT_DRIVER__MAX])(
+    const Netdev *netdev,
+    const char *name,
+    NetClientState *peer, Error **errp) = {
+        ...
+        [NET_CLIENT_DRIVER_TAP]       = net_init_tap,
+        ...
+};
+
+static int net_client_init1(const Netdev *netdev, bool is_netdev, Error **errp)
+{
+    ...
+    NetClientState *nc;
+    ...
+    if (net_client_init_fun[netdev->type](netdev, netdev->id, peer, errp) < 0) {
+        /* FIXME drop when all init functions store an Error */
+        if (errp && !*errp) {
+            error_setg(errp, "Device '%s' could not be initialized",
+                       NetClientDriver_str(netdev->type));
+        }
+        return -1;
+    }
+    ...
+}
+```
+在这里即调用[**net_init_tap()**](https://elixir.bootlin.com/qemu/v9.0.0-rc2/source/net/tap.c#L812)
+
+```c
+int net_init_tap(const Netdev *netdev, const char *name,
+                 NetClientState *peer, Error **errp)
+{
+    ...
+    tap = &netdev->u.tap;
+    queues = tap->has_queues ? tap->queues : 1;
+    ...
+    if (tap->ifname) {
+        pstrcpy(ifname, sizeof ifname, tap->ifname);
+    } else {
+        ifname[0] = '\0';
+    }
+
+    for (i = 0; i < queues; i++) {
+        fd = net_tap_init(tap, &vnet_hdr, i >= 1 ? "no" : script,
+                          ifname, sizeof ifname, queues > 1, errp);
+        if (fd == -1) {
+            return -1;
+        }
+        ...
+        net_init_tap_one(tap, peer, "tap", name, ifname,
+                         i >= 1 ? "no" : script,
+                         i >= 1 ? "no" : downscript,
+                         vhostfdname, vnet_hdr, fd, &err);
+        ...
+    }
+    
+
+    return 0;
+}
+
+static int net_tap_init(const NetdevTapOptions *tap, int *vnet_hdr,
+                        const char *setup_script, char *ifname,
+                        size_t ifname_sz, int mq_required, Error **errp)
+{
+    ...
+    fd = RETRY_ON_EINTR(tap_open(ifname, ifname_sz, vnet_hdr, vnet_hdr_required,
+                      mq_required, errp));
+    if (fd < 0) {
+        return -1;
+    }
+    ...
+    return fd;
+}
+
+static void net_init_tap_one(const NetdevTapOptions *tap, NetClientState *peer,
+                             const char *model, const char *name,
+                             const char *ifname, const char *script,
+                             const char *downscript, const char *vhostfdname,
+                             int vnet_hdr, int fd, Error **errp)
+{
+    ...
+    TAPState *s = net_tap_fd_init(peer, model, name, fd, vnet_hdr);
+    ...
+}
+
+//#0  net_tap_fd_init (peer=0x0, model=0x555556122e15 "tap", name=0x55555711cb60 "net", fd=0xb, vnet_hdr=0x1) at ../net/tap.c:417
+//#1  0x0000555555b8e095 in net_init_tap_one (tap=0x55555711c610, peer=0x0, model=0x555556122e15 "tap", name=0x55555711cb60 "net", 
+//    ifname=0x7fffffffd3f0 "tap_for_l1", script=0x555556efa360 "no", downscript=0x555556ef9280 "no", vhostfdname=0x0, vnet_hdr=0x1, fd=0xb, errp=0x7fffffffd478)
+//    at ../net/tap.c:707
+//#2  0x0000555555b8f150 in net_init_tap (netdev=0x55555711c600, name=0x55555711cb60 "net", peer=0x0, errp=0x555556e83800 <error_fatal>) at ../net/tap.c:1021
+//#3  0x0000555555b85242 in net_client_init1 (netdev=0x55555711c600, is_netdev=0x1, errp=0x555556e83800 <error_fatal>) at ../net/net.c:1320
+//#4  0x0000555555b855ed in net_client_init (opts=0x555556ef8f20, is_netdev=0x1, errp=0x555556e83800 <error_fatal>) at ../net/net.c:1428
+//#5  0x0000555555b86240 in net_init_netdev (dummy=0x0, opts=0x555556ef8f20, errp=0x555556e83800 <error_fatal>) at ../net/net.c:1747
+//#6  0x0000555555f6dccd in qemu_opts_foreach (list=0x555556d7fcc0 <qemu_netdev_opts>, func=0x555555b861d7 <net_init_netdev>, opaque=0x0, 
+//    errp=0x555556e83800 <error_fatal>) at ../util/qemu-option.c:1135
+//#7  0x0000555555b86774 in net_init_clients () at ../net/net.c:1857
+//#8  0x0000555555b32fb0 in qemu_create_late_backends () at ../system/vl.c:2011
+//#9  0x0000555555b37745 in qemu_init (argc=0x26, argv=0x7fffffffd968) at ../system/vl.c:3712
+//#10 0x0000555555d92c58 in main (argc=0x26, argv=0x7fffffffd968) at ../system/main.c:47
+//#11 0x00007ffff7b62ca8 in __libc_start_call_main (main=main@entry=0x555555d92c38 <main>, argc=argc@entry=0x26, argv=argv@entry=0x7fffffffd968)
+//    at ../sysdeps/nptl/libc_start_call_main.h:58
+//#12 0x00007ffff7b62d65 in __libc_start_main_impl (main=0x555555d92c38 <main>, argc=0x26, argv=0x7fffffffd968, init=<optimized out>, fini=<optimized out>, 
+//    rtld_fini=<optimized out>, stack_end=0x7fffffffd958) at ../csu/libc-start.c:360
+//#13 0x000055555584b661 in _start ()
+static TAPState *net_tap_fd_init(NetClientState *peer,
+                                 const char *model,
+                                 const char *name,
+                                 int fd,
+                                 int vnet_hdr)
+{
+    NetClientState *nc;
+    TAPState *s;
+
+    nc = qemu_new_net_client(&net_tap_info, peer, model, name);
+
+    s = DO_UPCAST(TAPState, nc, nc);
+
+    s->fd = fd;
+    s->host_vnet_hdr_len = vnet_hdr ? sizeof(struct virtio_net_hdr) : 0;
+    s->using_vnet_hdr = false;
+    s->has_ufo = tap_probe_has_ufo(s->fd);
+    s->has_uso = tap_probe_has_uso(s->fd);
+    s->enabled = true;
+    tap_set_offload(&s->nc, 0, 0, 0, 0, 0, 0, 0);
+    /*
+     * Make sure host header length is set correctly in tap:
+     * it might have been modified by another instance of qemu.
+     */
+    if (tap_probe_vnet_hdr_len(s->fd, s->host_vnet_hdr_len)) {
+        tap_fd_set_vnet_hdr_len(s->fd, s->host_vnet_hdr_len);
+    }
+    tap_read_poll(s, true);
+    s->vhost_net = NULL;
+
+    s->exit.notify = tap_exit_notify;
+    qemu_add_exit_notifier(&s->exit);
+
+    return s;
 }
 ```
 
